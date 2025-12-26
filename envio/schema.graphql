@@ -1,0 +1,83 @@
+# GraphQL Schema for Meta-Plot AI Envio Indexer
+
+type Permission @entity {
+  id: ID!
+  permissionId: String! @index
+  user: String! @index
+  target: String!
+  amount: BigDecimal!
+  expiry: BigInt!
+  active: Boolean!
+  totalExecuted: BigDecimal!
+  conditions: [String!]!
+  created: BigInt!
+  createdTx: String!
+  revokedAt: BigInt
+  revokedTx: String
+  executions: [AgentExecution!]! @derivedFrom(field: "permission")
+}
+
+type AgentExecution @entity {
+  id: ID!
+  permission: Permission!
+  target: String!
+  amount: BigDecimal!
+  timestamp: BigInt!
+  success: Boolean!
+  reason: String!
+  txHash: String! @index
+  gasUsed: BigInt
+  gasPrice: BigInt
+  blockNumber: BigInt!
+}
+
+type UserActivity @entity {
+  id: ID!
+  user: String! @index
+  type: ActivityType!
+  description: String!
+  amount: BigDecimal
+  asset: String
+  protocol: String
+  timestamp: BigInt!
+  txHash: String! @index
+  blockNumber: BigInt!
+  success: Boolean!
+}
+
+type PortfolioSnapshot @entity {
+  id: ID!
+  user: String! @index
+  totalValue: BigDecimal!
+  yieldEarned: BigDecimal!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+}
+
+type YieldPool @entity {
+  id: ID!
+  protocol: String!
+  asset: String!
+  apy: Float!
+  tvl: BigDecimal!
+  riskScore: Int!
+  lastUpdated: BigInt!
+}
+
+type GasPrice @entity {
+  id: ID!
+  price: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+}
+
+enum ActivityType {
+  PERMISSION_GRANTED
+  PERMISSION_REVOKED
+  INVESTMENT
+  YIELD_EARNED
+  REBALANCE
+  GAS_OPTIMIZATION
+  SWAP
+  WITHDRAWAL
+}
