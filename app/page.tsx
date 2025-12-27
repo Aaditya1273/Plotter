@@ -21,6 +21,14 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'chat' | 'dashboard' | 'assets' | 'history' | 'governance' | 'security' | 'settings'>('chat')
   const [isCollapsed, setIsCollapsed] = useState(false)
 
+  // Navigation handler that properly types the tab parameter
+  const handleNavigate = (tab: string) => {
+    const validTabs = ['chat', 'dashboard', 'assets', 'history', 'governance', 'security', 'settings'] as const
+    if (validTabs.includes(tab as any)) {
+      setActiveTab(tab as typeof activeTab)
+    }
+  }
+
   if (!isConnected) {
     return (
       <SmoothScroll>
@@ -75,7 +83,7 @@ export default function Home() {
       />
 
       <div className={`transition-all duration-300 min-h-screen flex flex-col ${isCollapsed ? 'pl-24' : 'pl-72'}`}>
-        <AppHeader account={address || ''} isCollapsed={isCollapsed} onNavigate={setActiveTab} />
+        <AppHeader account={address || ''} isCollapsed={isCollapsed} onNavigate={handleNavigate} />
 
         <main className="flex-1 pt-32 px-10 pb-12 overflow-x-hidden">
           <div className="max-w-7xl mx-auto">

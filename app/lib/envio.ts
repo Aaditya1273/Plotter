@@ -5,7 +5,60 @@ const ENVIO_ENDPOINT = process.env.NEXT_PUBLIC_ENVIO_ENDPOINT || 'https://indexe
 
 export const envioClient = new GraphQLClient(ENVIO_ENDPOINT)
 
-// GraphQL queries for Meta-Plot AI data
+// TypeScript interfaces for Envio data
+interface Activity {
+  id: string
+  type: string
+  description: string
+  amount: string
+  timestamp: string
+  txHash: string
+  status: string
+}
+
+interface Permission {
+  id: string
+  target: string
+  amount: string
+  frequency: string
+  conditions: string[]
+  status: string
+  created: string
+  lastExecution?: string
+  totalExecuted: number
+}
+
+interface PortfolioSnapshot {
+  timestamp: string
+  totalValue: string
+  yieldEarned: string
+}
+
+interface YieldPool {
+  id: string
+  protocol: string
+  asset: string
+  apy: number
+  tvl: string
+  riskScore: number
+}
+
+// Response types
+interface ActivitiesResponse {
+  activities: Activity[]
+}
+
+interface PermissionsResponse {
+  permissions: Permission[]
+}
+
+interface PortfolioResponse {
+  portfolioSnapshots: PortfolioSnapshot[]
+}
+
+interface YieldResponse {
+  yieldPools: YieldPool[]
+}
 export const GET_USER_ACTIVITIES = `
   query GetUserActivities($userAddress: String!) {
     activities(
@@ -74,9 +127,9 @@ export const GET_YIELD_OPPORTUNITIES = `
 `
 
 // Helper functions for data fetching
-export async function fetchUserActivities(userAddress: string) {
+export async function fetchUserActivities(userAddress: string): Promise<Activity[]> {
   try {
-    const data = await envioClient.request(GET_USER_ACTIVITIES, { userAddress })
+    const data = await envioClient.request(GET_USER_ACTIVITIES, { userAddress }) as ActivitiesResponse
     return data.activities || []
   } catch (error) {
     console.error('Error fetching user activities:', error)
@@ -84,9 +137,9 @@ export async function fetchUserActivities(userAddress: string) {
   }
 }
 
-export async function fetchUserPermissions(userAddress: string) {
+export async function fetchUserPermissions(userAddress: string): Promise<Permission[]> {
   try {
-    const data = await envioClient.request(GET_PERMISSIONS, { userAddress })
+    const data = await envioClient.request(GET_PERMISSIONS, { userAddress }) as PermissionsResponse
     return data.permissions || []
   } catch (error) {
     console.error('Error fetching permissions:', error)
@@ -94,9 +147,9 @@ export async function fetchUserPermissions(userAddress: string) {
   }
 }
 
-export async function fetchPortfolioValue(userAddress: string) {
+export async function fetchPortfolioValue(userAddress: string): Promise<PortfolioSnapshot[]> {
   try {
-    const data = await envioClient.request(GET_PORTFOLIO_VALUE, { userAddress })
+    const data = await envioClient.request(GET_PORTFOLIO_VALUE, { userAddress }) as PortfolioResponse
     return data.portfolioSnapshots || []
   } catch (error) {
     console.error('Error fetching portfolio value:', error)
@@ -104,9 +157,9 @@ export async function fetchPortfolioValue(userAddress: string) {
   }
 }
 
-export async function fetchYieldOpportunities() {
+export async function fetchYieldOpportunities(): Promise<YieldPool[]> {
   try {
-    const data = await envioClient.request(GET_YIELD_OPPORTUNITIES)
+    const data = await envioClient.request(GET_YIELD_OPPORTUNITIES) as YieldResponse
     return data.yieldPools || []
   } catch (error) {
     console.error('Error fetching yield opportunities:', error)
