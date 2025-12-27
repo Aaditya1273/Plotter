@@ -6,6 +6,9 @@ const nextConfig = {
     webpackBuildWorker: true,
   },
   
+  // Add empty turbopack config to silence the warning
+  turbopack: {},
+  
   // Exclude backend folders from compilation
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
   
