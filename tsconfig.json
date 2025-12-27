@@ -45,6 +45,11 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "envio/**/*",
+    "scripts/**/*",
+    "hardhat.config.js",
+    "cache/**/*",
+    "artifacts/**/*"
   ]
 }

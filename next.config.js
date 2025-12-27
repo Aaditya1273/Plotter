@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Exclude backend folders from compilation
+  pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
+  
   // Configure Turbopack (Next.js 16+ default)
   turbopack: {
     resolveAlias: {
@@ -9,6 +12,19 @@ const nextConfig = {
   
   // Keep webpack config for fallback compatibility
   webpack: (config, { isServer }) => {
+    // Exclude backend folders from webpack compilation
+    config.module.rules.push({
+      test: /\.(ts|tsx|js|jsx)$/,
+      exclude: [
+        /node_modules/,
+        /envio/,
+        /scripts/,
+        /cache/,
+        /artifacts/,
+        /test/,
+      ],
+    });
+
     // Handle MetaMask SDK React Native dependencies
     config.resolve.alias = {
       ...config.resolve.alias,
