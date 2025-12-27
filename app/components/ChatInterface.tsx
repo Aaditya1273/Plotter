@@ -23,7 +23,7 @@ import { parseUserSwarmIntent, generateSwarmDescription, taskToPermission } from
 import { useWriteContract, useWaitForTransactionReceipt, useGasPrice } from 'wagmi'
 import { parseUnits, encodeFunctionData, formatUnits } from 'viem'
 
-const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xdEb3a0D43D207ba8AD8e77F665B32B18c84Bf34a') as `0x${string}`
+const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
 
 const META_ARMY_ABI = [
   {
@@ -88,7 +88,7 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
     {
       id: '1',
       type: 'ai',
-      content: "Welcome to MetaArmy. I am your Swarm Orchestrator. What multi-chain tasks shall we automate today? (e.g., 'Swap $400 ETH for USDC and stake in Aave, then vote on ENS prop 204')",
+      content: "Hello! I'm MetaArmy AI, your DeFi automation assistant. I can help you understand protocols, set up automated strategies, or answer questions about yield farming. Try asking me something like 'What is Aave?' or 'Help me invest 100 USDC in DeFi' to get started!",
       timestamp: new Date()
     }
   ])
@@ -98,6 +98,135 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
   const [pendingSwarm, setPendingSwarm] = useState<any>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Helper function to determine if input is a swarm deployment intent
+  const isSwarmDeploymentIntent = async (input: string): Promise<boolean> => {
+    const normalizedInput = input.toLowerCase()
+    
+    // Strong indicators of deployment intent
+    const strongDeploymentIndicators = [
+      'swap', 'invest', 'stake', 'deploy', 'create swarm', 'execute', 'buy', 'sell',
+      'lend to', 'borrow from', 'put money', 'send', 'transfer', 'automate this',
+      'set up', 'i want to swap', 'i want to invest', 'help me swap', 'help me invest'
+    ]
+    
+    // DeFi protocol and asset mentions
+    const defiMentions = [
+      'aave', 'uniswap', 'lido', 'compound', 'usdc', 'eth', 'dai', 'weth'
+    ]
+    
+    // Amount indicators
+    const amountPattern = /\$?\d+(\.\d+)?\s*(usdc|eth|dai|dollars?|usd)/i
+    
+    // Check for strong deployment indicators
+    const hasStrongIndicator = strongDeploymentIndicators.some(indicator => 
+      normalizedInput.includes(indicator)
+    )
+    
+    // Check for DeFi mentions
+    const hasDeFiMention = defiMentions.some(protocol => 
+      normalizedInput.includes(protocol)
+    )
+    
+    // Check for amount mentions
+    const hasAmount = amountPattern.test(normalizedInput)
+    
+    // It's a deployment intent if:
+    // 1. Has strong indicator AND (DeFi mention OR amount)
+    // 2. OR has amount AND DeFi mention (even without strong indicator)
+    return (hasStrongIndicator && (hasDeFiMention || hasAmount)) || 
+           (hasAmount && hasDeFiMention)
+  }
+
+  // Generate conversational AI response using Gemini
+  const generateConversationalResponse = async (input: string): Promise<string> => {
+    if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+      return getStaticResponse(input)
+    }
+
+    try {
+      const { GoogleGenerativeAI } = await import('@google/generative-ai')
+      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY)
+      const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+
+      const prompt = `
+You are MetaArmy AI, a helpful assistant for a DeFi automation platform. You help users understand:
+- DeFi protocols (Aave, Uniswap, Lido, Compound)
+- Automated trading and yield farming
+- Smart contract permissions and security
+- Gas optimization and transaction batching
+- The MetaArmy platform features
+
+IMPORTANT: Be contextual and specific. If the user mentions specific amounts, protocols, or actions, acknowledge them directly in your response.
+
+User message: "${input}"
+
+RESPONSE GUIDELINES:
+1. If they mention specific amounts (like "12 USDC"), acknowledge that exact amount
+2. If they ask about investing, suggest the best protocol for their use case
+3. If they want to deploy something, guide them to be more specific or confirm their intent
+4. Be conversational and helpful, not robotic
+5. Keep responses concise (2-3 sentences max) but informative
+
+Examples:
+- User: "Help me invest 12 USDC in DeFi" → "I can help you invest that 12 USDC! For stable yield, Aave is great for lending USDC with around 3-5% APY. Would you like me to set up an automated investment in Aave for your 12 USDC?"
+- User: "What's the best yield for USDC?" → "For USDC yield, Aave typically offers 3-5% APY for lending, while Compound offers similar rates. MetaArmy can automatically move your funds to whichever has better rates!"
+
+Respond naturally and helpfully.
+`
+
+      const result = await model.generateContent(prompt)
+      const response = await result.response
+      return response.text()
+    } catch (error) {
+      console.error('Gemini AI error:', error)
+      return getStaticResponse(input)
+    }
+  }
+
+  // Enhanced fallback static responses for common queries
+  const getStaticResponse = (input: string): string => {
+    const normalizedInput = input.toLowerCase()
+    
+    // Extract amount if mentioned for contextual responses
+    const amountMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:usdc|eth|dai|dollars?|usd|\$)/i) || input.match(/\$(\d+(?:\.\d+)?)/i) || input.match(/(\d+(?:\.\d+)?)/i)
+    const amount = amountMatch ? amountMatch[1] : null
+    
+    if (normalizedInput.includes('hello') || normalizedInput.includes('hi')) {
+      return "Hello! I'm MetaArmy AI, your DeFi automation assistant. I can help you understand protocols, set up automated strategies, or answer questions about yield farming. What would you like to know?"
+    }
+    
+    // Contextual investment responses
+    if ((normalizedInput.includes('invest') || normalizedInput.includes('help')) && amount) {
+      return `I can help you invest that ${amount} ${normalizedInput.includes('usdc') ? 'USDC' : normalizedInput.includes('eth') ? 'ETH' : 'USDC'}! For stable yield, Aave is great for lending with around 3-5% APY. Would you like me to set up an automated investment in Aave for your ${amount}?`
+    }
+    
+    if (normalizedInput.includes('help')) {
+      return "I can help you with DeFi automation! Try asking me about specific protocols like Aave or Uniswap, or tell me what you want to automate. For example: 'invest 12 USDC in DeFi' or 'swap 100 USDC for ETH'."
+    }
+    
+    if (normalizedInput.includes('what') && normalizedInput.includes('metaarmy')) {
+      return "MetaArmy is an autonomous DeFi co-pilot that lets you automate complex strategies with simple natural language commands. You grant permissions once, and AI agents handle the rest - no more endless transaction approvals!"
+    }
+    
+    if (normalizedInput.includes('gas') || normalizedInput.includes('fee')) {
+      return "MetaArmy optimizes gas costs by batching multiple actions into single transactions. You can also set gas price conditions like 'when gas < 30 gwei' to execute only during low-cost periods."
+    }
+    
+    if (normalizedInput.includes('aave')) {
+      return "Aave is a leading lending protocol where you can earn yield by supplying assets or borrow against collateral. MetaArmy can automate deposits, withdrawals, and rebalancing based on APY changes."
+    }
+    
+    if (normalizedInput.includes('defi') && amount) {
+      return `For your ${amount} ${normalizedInput.includes('usdc') ? 'USDC' : 'investment'}, I'd recommend Aave for stable lending yield (3-5% APY) or Compound for similar returns. MetaArmy can automate the deposit and monitor for better rates!`
+    }
+    
+    if (normalizedInput.includes('security') || normalizedInput.includes('safe')) {
+      return "MetaArmy uses advanced permissions (ERC-7715) with granular controls - you set spending limits, time bounds, and conditions. All critical operations can require ZK-proof verification for maximum security."
+    }
+    
+    return "I'm here to help with DeFi automation and MetaArmy features. Feel free to ask about specific protocols, automation strategies, or try commands like 'invest 12 USDC in DeFi' to get started!"
+  }
   const { createPermission } = useSmartAccountsKit()
 
   const scrollToBottom = () => {
@@ -112,12 +241,58 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
     if (!input.trim() || isLoading) return
 
     setIsLoading(true)
+    
+    // Add user message immediately
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: input,
+      timestamp: new Date()
+    }
+    
+    setMessages(prev => [...prev, userMessage])
+    const currentInput = input
+    setInput('')
+
     try {
-      const swarmIntent = await parseUserSwarmIntent(input)
-      setPendingSwarm(swarmIntent)
-      setShowReviewModal(true)
+      // First, determine if this is a swarm deployment intent or just conversation
+      const isSwarmIntent = await isSwarmDeploymentIntent(currentInput)
+      
+      if (isSwarmIntent) {
+        // Parse as swarm intent and show review modal
+        const swarmIntent = await parseUserSwarmIntent(currentInput)
+        setPendingSwarm(swarmIntent)
+        setShowReviewModal(true)
+        
+        // Add AI response about the swarm
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: `I've analyzed your request and prepared a swarm bundle: "${swarmIntent.overallGoal}". Please review the actions before deployment.`,
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, aiMessage])
+      } else {
+        // Handle as normal conversation using Gemini AI
+        const aiResponse = await generateConversationalResponse(currentInput)
+        
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: aiResponse,
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, aiMessage])
+      }
     } catch (error) {
-      toast.error('Swarm Brain unavailable')
+      console.error('Chat error:', error)
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: "I'm having trouble processing that request. Could you try rephrasing it?",
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
     }
@@ -164,19 +339,33 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
       toast.loading(`Deploying Swarm: Creating on-chain bundle...`, { id: 'swarm' })
 
       // Prepare actions for contract
-      const actions = swarm.tasks.map((t: any) => ({
-        target: (t.targetAddress || '0x0000000000000000000000000000000000000000') as `0x${string}`,
-        amount: parseUnits(t.amount || '0', 18),
-        data: '0x' as `0x${string}`, // In a real app, this would be encoded call data
-        requiresZk: !!t.requiresZk
-      }))
+      const actions = swarm.tasks.map((t: any) => {
+        // Parse amount based on token type or use default
+        let amount = BigInt(0)
+        if (t.amount && typeof t.amount === 'string') {
+          const amountStr = t.amount.replace(/[^0-9.]/g, '') || '0'
+          if (t.amount.includes('USDC')) {
+            amount = parseUnits(amountStr, 6) // USDC has 6 decimals
+          } else {
+            amount = parseUnits(amountStr, 18) // Default to 18 decimals
+          }
+        }
 
-      // Real Contract Call
+        return {
+          target: (t.targetAddress || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+          amount,
+          data: '0x' as `0x${string}`, // In a real app, this would be encoded call data
+          requiresZk: !!t.requiresZk
+        }
+      })
+
+      // Real Contract Call with gas limit
       const txHash = await writeContractAsync({
         address: META_ARMY_ADDRESS,
         abi: META_ARMY_ABI,
         functionName: 'createSwarmBundle',
         args: [swarm.overallGoal, actions],
+        gas: BigInt(10000000), // Reduced gas limit to 10M (well under the 16.7M cap)
       })
 
       toast.loading(`Verifying Swarm on-chain: ${txHash.substring(0, 10)}...`, { id: 'swarm' })
@@ -233,29 +422,29 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
       {/* v3 Swarm Review Modal */}
       {showReviewModal && pendingSwarm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-xl">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full border border-white/20 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-10">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-black text-gray-900 flex items-center gap-3">
-                  <Layers className="w-7 h-7 text-metamask-500" /> Swarm Verification
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[90vh] border border-white/20 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+            <div className="p-6 sm:p-8 flex-1 overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl sm:text-2xl font-black text-gray-900 flex items-center gap-3">
+                  <Layers className="w-6 h-6 sm:w-7 sm:h-7 text-metamask-500" /> Swarm Verification
                 </h3>
                 <div className="px-3 py-1 bg-indigo-50 rounded-full text-[10px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100">
                   v3.0 Engine
                 </div>
               </div>
 
-              <div className="space-y-4 mb-10 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-3 mb-8">
                 {pendingSwarm.tasks.map((task: any, i: number) => (
-                  <div key={i} className="flex items-center gap-4 p-5 bg-gray-50 rounded-3xl border border-gray-100 group hover:border-metamask-200 transition-all">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center font-black text-xs text-gray-400 border border-gray-100">
+                  <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-metamask-200 transition-all">
+                    <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center font-black text-xs text-gray-400 border border-gray-100 flex-shrink-0">
                       {i + 1}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-0.5">{task.action}</p>
-                      <p className="font-bold text-gray-900">{task.amount} {task.asset} on <span className="text-metamask-600">{task.target}</span></p>
+                      <p className="font-bold text-gray-900 truncate">{task.amount} {task.asset} on <span className="text-metamask-600">{task.target}</span></p>
                     </div>
                     {task.requiresZk && (
-                      <div title="ZK Proofs Enabled">
+                      <div title="ZK Proofs Enabled" className="flex-shrink-0">
                         <Shield className="w-5 h-5 text-indigo-500" />
                       </div>
                     )}
@@ -263,15 +452,15 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
                 ))}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-10">
-                <div className="p-5 bg-green-50 rounded-3xl border border-green-100">
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="p-4 bg-green-50 rounded-2xl border border-green-100">
                   <div className="flex items-center gap-2 mb-2">
                     <Zap className="w-4 h-4 text-green-600" />
                     <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Savings</span>
                   </div>
                   <p className="text-lg font-black text-green-900">${(pendingSwarm.tasks.length * 6).toFixed(0)} gas saved</p>
                 </div>
-                <div className="p-5 bg-indigo-50 rounded-3xl border border-indigo-100">
+                <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle className="w-4 h-4 text-indigo-600" />
                     <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Security</span>
@@ -279,10 +468,21 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
                   <p className="text-lg font-black text-indigo-900">ZK Batch Seal</p>
                 </div>
               </div>
-
+            </div>
+            
+            {/* Fixed footer with buttons */}
+            <div className="p-6 sm:p-8 pt-0 flex-shrink-0">
               <div className="flex gap-4">
-                <button onClick={() => setShowReviewModal(false)} className="px-8 py-5 rounded-2xl text-gray-400 font-bold hover:bg-gray-50 transition-all">Cancel</button>
-                <button onClick={handleConfirmSwarm} className="flex-1 px-8 py-5 rounded-2xl bg-gray-900 text-white font-black uppercase tracking-widest hover:bg-metamask-600 shadow-xl transition-all active:scale-[0.98]">
+                <button 
+                  onClick={() => setShowReviewModal(false)} 
+                  className="px-6 py-4 rounded-2xl text-gray-400 font-bold hover:bg-gray-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmSwarm} 
+                  className="flex-1 px-6 py-4 rounded-2xl bg-gray-900 text-white font-black uppercase tracking-widest hover:bg-metamask-600 shadow-xl transition-all active:scale-[0.98]"
+                >
                   Launch Swarm
                 </button>
               </div>
@@ -370,7 +570,7 @@ export function ChatInterface({ account }: ChatInterfaceProps) {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                  placeholder="Define your Swarm intent..."
+                  placeholder="Ask me anything about DeFi or describe what you want to automate..."
                   className="flex-1 bg-transparent py-4 text-sm font-bold text-gray-900 focus:outline-none resize-none placeholder:text-gray-300"
                   rows={1}
                   disabled={isLoading}

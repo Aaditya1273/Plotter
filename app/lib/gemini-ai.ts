@@ -25,7 +25,9 @@ export async function parseIntentWithGemini(userInput: string): Promise<GeminiSw
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
 
     const prompt = `
-You are the Swarm Intelligence for MetaArmy. Parse the following user intent into a sequence of blockchain actions (Swarm Bundle).
+You are the Swarm Intelligence for MetaArmy, a DeFi automation platform. Parse the following user intent into precise blockchain actions.
+
+CRITICAL: Extract the EXACT amount mentioned by the user. Do not default to generic amounts.
 
 User Input: "${userInput}"
 
@@ -35,27 +37,51 @@ Extract and return a JSON object with these fields:
 - tasks: array of objects, each containing:
     - action: one of ["invest", "swap", "yield", "rebalance", "dca", "vote", "snipe"]
     - asset: cryptocurrency symbol (ETH, USDC, ARMY, etc.)
-    - amount: amount (e.g., "0.5", "400", "all")
-    - target: DeFi protocol (Aave, Uniswap, Lido, etc.) or "MetaArmy DAO"
-    - conditions: array of triggers (e.g., ["gas < 30 gwei", "APY > 5%"])
+    - amount: EXACT amount from user input (e.g., "12", "0.5", "100.25") - DO NOT use default amounts
+    - target: DeFi protocol (Aave, Compound, Uniswap, Lido, etc.) or "MetaArmy DAO"
+    - conditions: array of smart triggers (e.g., ["gas < 30 gwei", "APY > 5%"])
     - requiresZk: boolean (true if "secure", "verified", or "zk" is mentioned)
 - priority: one of ["speed", "efficiency", "cost"]
 - confidence: 0-1 score
 
-Example:
-Input: "swap $400 eth for usdc and stake in aave securely"
+AMOUNT EXTRACTION RULES:
+- "invest 12 USDC" → amount: "12"
+- "Help me invest 12 USDC in DeFi" → amount: "12"
+- "$50 into Aave" → amount: "50"
+- "0.1 ETH to Uniswap" → amount: "0.1"
+- If no amount specified, use "100" as default
+
+PROTOCOL MAPPING:
+- "DeFi", "yield", "lending" → Aave
+- "swap", "trade", "exchange" → Uniswap  
+- "stake", "staking" → Lido
+- "compound" → Compound
+
+Examples:
+Input: "Help me invest 12 USDC in DeFi"
 Output: {
-  "overallGoal": "Swap and Stake Swarm",
+  "overallGoal": "Invest 12 USDC in DeFi yield farming",
+  "isBundle": false,
+  "tasks": [
+    { "action": "invest", "asset": "USDC", "amount": "12", "target": "Aave", "conditions": ["APY > 3%", "gas < 30 gwei"], "requiresZk": false }
+  ],
+  "priority": "efficiency",
+  "confidence": 0.95
+}
+
+Input: "swap 0.5 ETH for USDC and stake in Aave securely"
+Output: {
+  "overallGoal": "Swap ETH and stake in Aave with security",
   "isBundle": true,
   "tasks": [
-    { "action": "swap", "asset": "ETH", "amount": "400", "target": "Uniswap", "conditions": ["gas < 25 gwei"], "requiresZk": true },
-    { "action": "invest", "asset": "USDC", "amount": "400", "target": "Aave", "conditions": ["APY > 3%"], "requiresZk": true }
+    { "action": "swap", "asset": "ETH", "amount": "0.5", "target": "Uniswap", "conditions": ["gas < 25 gwei"], "requiresZk": true },
+    { "action": "invest", "asset": "USDC", "amount": "0.5", "target": "Aave", "conditions": ["APY > 3%"], "requiresZk": true }
   ],
   "priority": "efficiency",
   "confidence": 0.98
 }
 
-Return ONLY valid JSON.
+Return ONLY valid JSON without any markdown formatting.
 `
 
     const result = await model.generateContent(prompt)
@@ -92,10 +118,39 @@ Return ONLY valid JSON.
   }
 }
 
-// Fallback rule-based parsing if Gemini fails
+// Fallback rule-based parsing if Gemini fails - Enhanced for better amount detection
 function fallbackParsing(input: string): GeminiSwarmResponse {
   const normalizedInput = input.toLowerCase()
   const tasks: SwarmTaskResponse[] = []
+
+  // Enhanced amount extraction
+  const extractAmount = (text: string): string => {
+    const patterns = [
+      /(\d+(?:\.\d+)?)\s*(?:usdc|eth|dai|dollars?|usd)/i,  // "12 USDC", "12.5 ETH"
+      /\$(\d+(?:\.\d+)?)/,                                   // "$12", "$12.5"
+      /invest\s+(\d+(?:\.\d+)?)/i,                          // "invest 12"
+      /(\d+(?:\.\d+)?)\s*(?:in|into|on)/i,                 // "12 in DeFi"
+      /(\d+(?:\.\d+)?)/                                     // Any number as fallback
+    ]
+    
+    for (const pattern of patterns) {
+      const match = text.match(pattern)
+      if (match) {
+        return match[1]
+      }
+    }
+    return '100' // Default fallback
+  }
+
+  // Enhanced protocol detection
+  const detectProtocol = (text: string): string => {
+    if (text.includes('aave')) return 'Aave'
+    if (text.includes('compound')) return 'Compound'
+    if (text.includes('uniswap') || text.includes('swap')) return 'Uniswap'
+    if (text.includes('lido') || text.includes('staking')) return 'Lido'
+    if (text.includes('defi') || text.includes('yield') || text.includes('invest')) return 'Aave'
+    return 'Aave' // Default for investment
+  }
 
   // Basic split for fallback
   const parts = input.split(/ and |, /)
@@ -103,10 +158,10 @@ function fallbackParsing(input: string): GeminiSwarmResponse {
     const subPart = part.toLowerCase()
     tasks.push({
       action: subPart.includes('swap') ? 'swap' : subPart.includes('snipe') ? 'snipe' : 'invest',
-      asset: subPart.match(/(usdc|eth|army)/i)?.[0].toUpperCase() || 'USDC',
-      amount: subPart.match(/\$?(\d+)/)?.[1] || '100',
-      target: subPart.includes('aave') ? 'Aave' : 'Uniswap',
-      conditions: ['Automated Fallback'],
+      asset: subPart.match(/(usdc|eth|army|dai|weth)/i)?.[0].toUpperCase() || 'USDC',
+      amount: extractAmount(part),
+      target: detectProtocol(subPart),
+      conditions: ['Automated by MetaArmy'],
       requiresZk: subPart.includes('zk') || subPart.includes('secure')
     })
   })
@@ -116,7 +171,7 @@ function fallbackParsing(input: string): GeminiSwarmResponse {
     isBundle: tasks.length > 1,
     tasks,
     priority: 'efficiency',
-    confidence: 0.5
+    confidence: 0.7
   }
 }
 

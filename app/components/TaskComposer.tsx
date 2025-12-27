@@ -1,3 +1,4 @@
+// TaskComposer v3.0 - Workflow Builder with drag-and-drop reordering
 'use client'
 
 import { useState } from 'react'
@@ -15,13 +16,16 @@ import {
     Code,
     CheckCircle,
     Loader2,
-    Lock as SecureLock
+    Lock as SecureLock,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-react'
 import { useWriteContract } from 'wagmi'
 import { parseUnits } from 'viem'
 import { toast } from 'react-hot-toast'
+import { SUPPORTED_ASSETS } from '../lib/constants'
 
-const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xdEb3a0D43D207ba8AD8e77F665B32B18c84Bf34a') as `0x${string}`
+const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
 
 const META_ARMY_ABI = [
     {
@@ -75,7 +79,7 @@ export function TaskComposer() {
             defi: { id: Date.now().toString(), type: 'defi', action: 'Invest Liquid', target: 'Lido', amount: '1 ETH', conditions: ['APY > 3%'], contractData: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84' },
             nft: { id: Date.now().toString(), type: 'nft', action: 'Snipe Flow', target: 'OpenSea', amount: '0.1 ETH', conditions: ['Floor < 0.05'], contractData: '0x0000000000000000000000000000000000000000' },
             social: { id: Date.now().toString(), type: 'social', action: 'Tip Creator', target: 'Farcaster', amount: '5 $MPA', conditions: ['On Success'], contractData: '0x0000000000000000000000000000000000000000' },
-            gov: { id: Date.now().toString(), type: 'gov', action: 'Auto-Vote', target: 'ENS DAO', amount: 'N/A', conditions: ['Proposal Live'], contractData: '0x0000000000000000000000000000000000000000' }
+            gov: { id: Date.now().toString(), type: 'gov', action: 'Auto-Vote', target: 'ENS DAO', amount: '1 Vote', conditions: ['Proposal Live'], contractData: '0x0000000000000000000000000000000000000000' }
         }
         setTasks([...tasks, newTasks[type]])
     }
@@ -84,25 +88,68 @@ export function TaskComposer() {
         setTasks(tasks.filter(t => t.id !== id))
     }
 
+    const moveTask = (id: string, direction: 'up' | 'down') => {
+        const currentIndex = tasks.findIndex(t => t.id === id)
+        if (currentIndex === -1) return
+        
+        const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+        if (newIndex < 0 || newIndex >= tasks.length) return
+        
+        const newTasks = [...tasks]
+        const [movedTask] = newTasks.splice(currentIndex, 1)
+        newTasks.splice(newIndex, 0, movedTask)
+        setTasks(newTasks)
+    }
+
     const { writeContractAsync } = useWriteContract()
 
     const handleSubmit = async () => {
         setIsSimulating(true)
         try {
             // Convert UI tasks to Contract Actions
-            const actions = tasks.map(t => ({
-                target: (t.contractData?.startsWith('0x') ? t.contractData.substring(0, 42) : '0x0000000000000000000000000000000000000000') as `0x${string}`,
-                amount: parseUnits(t.amount.replace(/[^0-9.]/g, '') || '0', 18),
-                data: '0x' as `0x${string}`,
-                requiresZk: true
-            }))
+            const actions = tasks.map(t => {
+                // Parse amount based on token type and task type
+                let amount = BigInt(0)
+                
+                if (t.type === 'gov') {
+                    // Governance votes don't have monetary amounts, use 1 as placeholder
+                    amount = BigInt(1)
+                } else {
+                    const amountStr = t.amount.replace(/[^0-9.]/g, '') || '0'
+                    
+                    // Find matching asset from supported assets
+                    const asset = SUPPORTED_ASSETS.find(a => 
+                        t.amount.toUpperCase().includes(a.symbol.toUpperCase())
+                    )
+                    
+                    if (asset) {
+                        amount = parseUnits(amountStr, asset.decimals)
+                    } else {
+                        // Default to 18 decimals for unknown tokens
+                        amount = parseUnits(amountStr, 18)
+                    }
+                }
 
-            // Send Transaction
+                return {
+                    target: (t.contractData?.startsWith('0x') ? t.contractData.substring(0, 42) : '0x0000000000000000000000000000000000000000') as `0x${string}`,
+                    amount,
+                    data: '0x' as `0x${string}`,
+                    requiresZk: true
+                }
+            })
+
+            // Estimate gas before sending transaction
+            const estimatedGas = BigInt(Math.min(10000000, 3000000 + (actions.length * 50000)))
+            
+            console.log(`Estimated gas for ${actions.length} actions: ${estimatedGas}`)
+
+            // Send Transaction with gas limit
             const txHash = await writeContractAsync({
                 address: META_ARMY_ADDRESS,
                 abi: META_ARMY_ABI,
                 functionName: 'createSwarmBundle',
                 args: [`Mixed Swarm Batch (${tasks.length} Agents)`, actions],
+                gas: estimatedGas,
             })
 
             // Success UI
@@ -161,8 +208,26 @@ export function TaskComposer() {
                 <div className="space-y-4">
                     {tasks.map((task, index) => (
                         <div key={task.id} className="group relative flex items-center gap-6 bg-white rounded-[2.5rem] p-8 border border-gray-100 hover:border-metamask-300 transition-all hover:shadow-2xl hover:shadow-indigo-50">
-                            <div className="cursor-grab text-gray-200 group-hover:text-metamask-400 h-full flex items-center">
-                                <GripVertical className="w-6 h-6" />
+                            <div className="flex flex-col gap-1">
+                                <button
+                                    onClick={() => moveTask(task.id, 'up')}
+                                    disabled={index === 0}
+                                    className="p-1 text-gray-300 hover:text-metamask-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Move up"
+                                >
+                                    <ArrowUp className="w-4 h-4" />
+                                </button>
+                                <div className="cursor-grab text-gray-200 group-hover:text-metamask-400">
+                                    <GripVertical className="w-4 h-4" />
+                                </div>
+                                <button
+                                    onClick={() => moveTask(task.id, 'down')}
+                                    disabled={index === tasks.length - 1}
+                                    className="p-1 text-gray-300 hover:text-metamask-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Move down"
+                                >
+                                    <ArrowDown className="w-4 h-4" />
+                                </button>
                             </div>
 
                             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 ${task.type === 'defi' ? 'bg-metamask-50 text-metamask-600' :
@@ -171,11 +236,11 @@ export function TaskComposer() {
                                 }`}>
                                 {task.type === 'defi' ? <Zap className="w-8 h-8" /> :
                                     task.type === 'nft' ? <MousePointer2 className="w-8 h-8" /> :
-                                        task.type === 'social' ? <Globe className="w-8 h-8" /> : <Shield className="w-8 h-8" />}
+                                        task.type === 'social' ? <Globe className="w-8 h-8" /> : <Gavel className="w-8 h-8" />}
                             </div>
 
                             <div className="flex-1">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Sub-Agent {index + 1} • {task.type}</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Sub-Agent {index + 1} • {task.type.toUpperCase()}</p>
                                 <div className="flex items-baseline gap-2">
                                     <h3 className="text-xl font-black text-gray-900">{task.action}</h3>
                                     <span className="text-sm font-bold text-gray-300">target {task.target}</span>
@@ -183,7 +248,11 @@ export function TaskComposer() {
                             </div>
 
                             <div className="hidden md:flex flex-col items-end gap-1 px-8 border-l border-gray-50">
-                                <p className="text-lg font-black text-indigo-600 leading-none">{task.amount}</p>
+                                <p className={`text-lg font-black leading-none ${
+                                    task.type === 'gov' ? 'text-amber-600' : 'text-indigo-600'
+                                }`}>
+                                    {task.amount}
+                                </p>
                                 <div className="flex gap-2">
                                     {task.conditions.map(c => (
                                         <span key={c} className="text-[8px] font-black bg-gray-900 text-white px-2 py-0.5 rounded-full uppercase">{c}</span>

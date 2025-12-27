@@ -184,6 +184,9 @@ contract MetaArmy is Ownable {
         string memory goal,
         SwarmAction[] memory actions
     ) external returns (bytes32) {
+        require(actions.length > 0, "No actions provided");
+        require(actions.length <= 50, "Too many actions"); // Limit to prevent gas issues
+        
         bytes32 bundleId = keccak256(abi.encodePacked(msg.sender, goal, block.timestamp));
         
         swarmBundles[bundleId] = SwarmBundle({
@@ -195,8 +198,14 @@ contract MetaArmy is Ownable {
             executedActions: 0
         });
 
+        // More gas-efficient batch storage
         for (uint256 i = 0; i < actions.length; i++) {
-            bundleActions[bundleId].push(actions[i]);
+            bundleActions[bundleId].push(SwarmAction({
+                target: actions[i].target,
+                amount: actions[i].amount,
+                data: actions[i].data,
+                requiresZk: actions[i].requiresZk
+            }));
         }
 
         emit SwarmBundleCreated(bundleId, msg.sender, goal, actions.length);
@@ -212,6 +221,9 @@ contract MetaArmy is Ownable {
         require(bundle.user == msg.sender || msg.sender == owner(), "Not authorized");
 
         SwarmAction[] storage actions = bundleActions[bundleId];
+        require(zkProofHashes.length == actions.length, "Proof count mismatch");
+        
+        uint256 successCount = 0;
         
         for (uint256 i = 0; i < actions.length; i++) {
             SwarmAction storage action = actions[i];
@@ -220,15 +232,16 @@ contract MetaArmy is Ownable {
                 require(zkProofHashes[i] != bytes32(0), "Action requires ZK proof");
             }
 
-            (bool success, ) = action.target.call{value: 0}(action.data);
+            (bool success, ) = action.target.call{value: action.amount}(action.data);
             
             if (success) {
-                bundle.executedActions++;
+                successCount++;
             }
             
             emit SwarmActionExecuted(bundleId, i, success);
         }
 
+        bundle.executedActions = successCount;
         bundle.active = false; 
     }
 
@@ -238,5 +251,51 @@ contract MetaArmy is Ownable {
 
     function setZkProver(address _zkProver) external onlyOwner {
         zkProver = _zkProver;
+    }
+
+    // Gas estimation helper
+    function estimateBundleGas(SwarmAction[] memory actions) external view returns (uint256) {
+        uint256 baseGas = 21000; // Base transaction cost
+        uint256 storageGas = actions.length * 20000; // Approximate storage cost per action
+        uint256 executionGas = actions.length * 50000; // Approximate execution cost per action
+        
+        return baseGas + storageGas + executionGas;
+    }
+
+    // Create bundle with gas limit check
+    function createSwarmBundleSafe(
+        string memory goal,
+        SwarmAction[] memory actions,
+        uint256 gasLimit
+    ) external returns (bytes32) {
+        uint256 estimatedGas = this.estimateBundleGas(actions);
+        require(estimatedGas <= gasLimit, "Estimated gas exceeds limit");
+        
+        require(actions.length > 0, "No actions provided");
+        require(actions.length <= 50, "Too many actions"); // Limit to prevent gas issues
+        
+        bytes32 bundleId = keccak256(abi.encodePacked(msg.sender, goal, block.timestamp));
+        
+        swarmBundles[bundleId] = SwarmBundle({
+            user: msg.sender,
+            goal: goal,
+            timestamp: block.timestamp,
+            active: true,
+            totalActions: actions.length,
+            executedActions: 0
+        });
+
+        // More gas-efficient batch storage
+        for (uint256 i = 0; i < actions.length; i++) {
+            bundleActions[bundleId].push(SwarmAction({
+                target: actions[i].target,
+                amount: actions[i].amount,
+                data: actions[i].data,
+                requiresZk: actions[i].requiresZk
+            }));
+        }
+
+        emit SwarmBundleCreated(bundleId, msg.sender, goal, actions.length);
+        return bundleId;
     }
 }

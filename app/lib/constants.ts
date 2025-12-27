@@ -1,8 +1,8 @@
 // Contract addresses and constants for Meta-Plot AI
 
 export const CONTRACTS = {
-  // Real deployed contract address on Sepolia
-  META_PLOT_AGENT: '0xdEb3a0D43D207ba8AD8e77F665B32B18c84Bf34a',
+  // Updated deployed contract address on Sepolia (with gas optimizations)
+  META_PLOT_AGENT: '0xcf4F105FeAc23F00489a7De060D34959f8796dd0',
   
   // Real Sepolia testnet addresses
   AAVE_POOL: '0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951', // Aave V3 Pool on Sepolia

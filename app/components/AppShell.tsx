@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useBlockchainData } from '../hooks/useBlockchainData'
+import { SearchSystem } from './SearchSystem'
+import { NotificationCenter } from './NotificationCenter'
 
 interface SidebarProps {
     activeTab: string
@@ -86,20 +88,11 @@ export function Sidebar({ activeTab, setActiveTab, isCollapsed, setIsCollapsed }
     )
 }
 
-export function AppHeader({ account, isCollapsed }: { account: string; isCollapsed: boolean }) {
+export function AppHeader({ account, isCollapsed, onNavigate }: { account: string; isCollapsed: boolean; onNavigate?: (tab: string) => void }) {
     const { totalNetWorth } = useBlockchainData()
     return (
         <header className={`fixed top-0 right-0 h-24 bg-white/60 backdrop-blur-xl border-b border-gray-100 z-[90] transition-all duration-300 flex items-center px-10 ${isCollapsed ? 'left-24' : 'left-72'}`}>
-            <div className="flex-1 max-w-2xl">
-                <div className="relative group">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-metamask-500 transition-colors" />
-                    <input
-                        type="text"
-                        placeholder="Search agents, assets, or DAO proposals..."
-                        className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3 pl-12 pr-4 text-sm font-medium focus:ring-4 focus:ring-metamask-500/5 focus:bg-white transition-all outline-none"
-                    />
-                </div>
-            </div>
+            <SearchSystem onNavigate={onNavigate} />
 
             <div className="flex items-center gap-6">
                 <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 rounded-2xl border border-indigo-100">
@@ -107,9 +100,9 @@ export function AppHeader({ account, isCollapsed }: { account: string; isCollaps
                     <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">ZK Secure</span>
                 </div>
 
-                <button className="relative w-12 h-12 bg-white rounded-2xl border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-all">
-                    <Bell className="w-5 h-5 text-gray-500" />
-                </button>
+                <div className="relative">
+                    <NotificationCenter />
+                </div>
 
                 <div className="flex items-center gap-3">
                     <div className="text-right hidden md:block">

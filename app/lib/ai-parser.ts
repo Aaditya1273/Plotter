@@ -47,27 +47,87 @@ export async function parseUserSwarmIntent(input: string): Promise<ParsedSwarmIn
     }
   }
 
-  // Rule-Based Swarm Parsing (v3 Fallback)
+  // Rule-Based Swarm Parsing (v3 Fallback) - Enhanced Amount Detection
   const tasks: SwarmTask[] = []
+
+  // Enhanced amount extraction - look for numbers with or without currency symbols
+  const extractAmount = (text: string): string => {
+    // Look for patterns like "12 USDC", "$12", "12.5", "invest 12"
+    const patterns = [
+      /(\d+(?:\.\d+)?)\s*(?:usdc|eth|dai|dollars?|usd)/i,  // "12 USDC", "12.5 ETH"
+      /\$(\d+(?:\.\d+)?)/,                                   // "$12", "$12.5"
+      /invest\s+(\d+(?:\.\d+)?)/i,                          // "invest 12"
+      /(\d+(?:\.\d+)?)\s*(?:in|into|on)/i,                 // "12 in DeFi"
+      /(\d+(?:\.\d+)?)/                                     // Any number as fallback
+    ]
+    
+    for (const pattern of patterns) {
+      const match = text.match(pattern)
+      if (match) {
+        return match[1]
+      }
+    }
+    return '100' // Default fallback
+  }
+
+  // Enhanced protocol detection
+  const detectProtocol = (text: string): string => {
+    const protocols = {
+      'aave': 'Aave',
+      'compound': 'Compound', 
+      'uniswap': 'Uniswap',
+      'lido': 'Lido',
+      'yearn': 'Yearn',
+      'curve': 'Curve',
+      'defi': 'Aave', // Default DeFi to Aave
+      'yield': 'Aave',
+      'lending': 'Aave',
+      'liquidity': 'Uniswap',
+      'swap': 'Uniswap',
+      'staking': 'Lido'
+    }
+    
+    for (const [keyword, protocol] of Object.entries(protocols)) {
+      if (text.toLowerCase().includes(keyword)) {
+        return protocol
+      }
+    }
+    return 'Aave' // Default to Aave for investment
+  }
+
+  // Enhanced asset detection
+  const detectAsset = (text: string): string => {
+    const assets = ['USDC', 'ETH', 'DAI', 'WETH', 'USDT']
+    for (const asset of assets) {
+      if (text.toLowerCase().includes(asset.toLowerCase())) {
+        return asset
+      }
+    }
+    return 'USDC' // Default
+  }
 
   // Basic split by 'and' or ',' to simulate multi-tasking
   const parts = input.split(/ and |, /)
   parts.forEach((part, index) => {
     const subPart = part.toLowerCase()
     let action: SwarmTask['action'] = 'invest'
-    if (subPart.includes('swap')) action = 'swap'
-    else if (subPart.includes('snipe')) action = 'snipe'
-    else if (subPart.includes('vote')) action = 'vote'
-    else if (subPart.includes('post')) action = 'post'
+    
+    // Enhanced action detection
+    if (subPart.includes('swap') || subPart.includes('exchange')) action = 'swap'
+    else if (subPart.includes('snipe') || subPart.includes('buy')) action = 'snipe'
+    else if (subPart.includes('vote') || subPart.includes('govern')) action = 'vote'
+    else if (subPart.includes('post') || subPart.includes('social')) action = 'post'
+    else if (subPart.includes('yield') || subPart.includes('farm')) action = 'yield'
+    else if (subPart.includes('dca') || subPart.includes('average')) action = 'dca'
 
     tasks.push({
       id: (index + 1).toString(),
       action,
-      asset: subPart.match(/(usdc|eth|dai|mpa)/i)?.[0].toUpperCase() || 'USDC',
-      target: subPart.includes('aave') ? 'Aave' : subPart.includes('uniswap') ? 'Uniswap' : subPart.includes('lido') ? 'Lido' : 'Unknown Protocol',
-      amount: subPart.match(/\$(\d+)/)?.[1] || '100',
+      asset: detectAsset(part),
+      target: detectProtocol(part),
+      amount: extractAmount(part),
       conditions: ['Automated by MetaArmy'],
-      requiresZk: subPart.includes('zk') || subPart.includes('secure')
+      requiresZk: subPart.includes('zk') || subPart.includes('secure') || subPart.includes('private')
     })
   })
 

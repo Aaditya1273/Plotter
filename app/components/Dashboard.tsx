@@ -19,11 +19,12 @@ import {
 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { TaskComposer } from './TaskComposer'
+import { SwarmMarketplace } from './SwarmMarketplace'
 import { useBlockchainData, useTransactionHistory } from '../hooks/useBlockchainData'
 import { useWriteContract } from 'wagmi'
 import { toast } from 'react-hot-toast'
 
-const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xdEb3a0D43D207ba8AD8e77F665B32B18c84Bf34a') as `0x${string}`
+const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
 
 const META_ARMY_ABI = [
   {
@@ -188,94 +189,78 @@ export function Dashboard({ account }: DashboardProps) {
             </div>
 
             <div className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-sm">
-              <h3 className="text-xl font-black mb-10 flex items-center gap-3"><Layers className="w-6 h-6 text-gray-400" /> Swarm Feed</h3>
+              <div className="flex items-center justify-between mb-10">
+                <h3 className="text-xl font-black flex items-center gap-3">
+                  <Layers className="w-6 h-6 text-gray-400" /> 
+                  Swarm Feed
+                </h3>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="px-3 py-1 bg-gray-50 hover:bg-gray-100 rounded-lg text-[9px] font-black uppercase tracking-widest text-gray-600 transition-all"
+                >
+                  Refresh
+                </button>
+              </div>
               <div className="space-y-4">
                 {history.length > 0 ? history.slice(0, 4).map((tx, i) => (
-                  <div key={i} className="flex items-center gap-5 p-5 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${tx.type === 'RECEIVED' ? 'bg-green-50 text-green-600' : 'bg-gray-900 text-white'}`}>
-                      {tx.type === 'RECEIVED' ? <CheckCircle className="w-6 h-6" /> : <Cpu className="w-6 h-6" />}
+                  <div 
+                    key={i} 
+                    onClick={() => window.open(`https://sepolia.etherscan.io/tx/${tx.fullHash || tx.id}`, '_blank')}
+                    className="flex items-center gap-5 p-5 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100 cursor-pointer group"
+                  >
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform ${
+                      tx.type === 'SWARM_DEPLOYMENT' ? 'bg-purple-50 text-purple-600' :
+                      tx.type === 'PERMISSION_GRANTED' ? 'bg-green-50 text-green-600' :
+                      tx.type === 'SWARM_EXECUTION' ? 'bg-blue-50 text-blue-600' :
+                      'bg-gray-50 text-gray-600'
+                    }`}>
+                      {tx.type === 'SWARM_DEPLOYMENT' ? <Cpu className="w-6 h-6" /> :
+                       tx.type === 'PERMISSION_GRANTED' ? <CheckCircle className="w-6 h-6" /> :
+                       <Activity className="w-6 h-6" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1">
                         <p className="text-sm font-bold truncate text-gray-900">{tx.label}</p>
-                        <span className="text-[10px] font-black text-gray-400">{tx.age}</span>
+                        <span className="text-[10px] font-black text-gray-400">{new Date(tx.age).toLocaleTimeString()}</span>
                       </div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500">{tx.hash}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500">{tx.hash}</p>
+                        <span className="text-[9px] text-gray-400">• {tx.gas}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {tx.zk && <span className="text-[8px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-black uppercase">ZK Verified</span>}
+                        <span className="text-[8px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full font-black uppercase">{tx.status}</span>
+                        {tx.amount && <span className="text-[8px] text-gray-500">{tx.amount}</span>}
+                      </div>
                     </div>
                   </div>
                 )) : (
                   <div className="p-10 text-center">
-                    <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">No Recent Swarm Activity</p>
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                      <Activity className="w-6 h-6 text-gray-400" />
+                    </div>
+                    <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mb-2">No MetaArmy Activity Yet</p>
+                    <p className="text-xs text-gray-500">Deploy a swarm to see transaction history</p>
                   </div>
                 )}
               </div>
             </div>
           </div>
         </div>
+      ) : activeView === 'marketplace' ? (
+        <SwarmMarketplace />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {[
-            { name: 'Yield Swarm', impact: '14.2% APY', risk: 'Low', protocol: 'Aave + Lido', verified: true },
-            { name: 'NFT Sniper', impact: '7.21 ETH/mo', risk: 'High', protocol: 'OpenSea', verified: true },
-            { name: 'Gov Proxy', impact: '12 Active', risk: 'Low', protocol: 'MetaArmy DAO', verified: true }
-          ].map((item, i) => (
-            <div key={i} className="bg-white rounded-[3rem] p-10 border border-gray-100 hover:border-metamask-400 hover:shadow-2xl transition-all group">
-              <div className="flex justify-between items-start mb-10">
-                <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center font-black text-2xl group-hover:bg-gray-900 group-hover:text-white transition-all">
-                  {item.name[0]}
-                </div>
-                <div className="flex gap-2">
-                  <span className="px-3 py-1 bg-gray-50 text-[9px] font-black uppercase tracking-widest rounded-lg">{item.risk} Risk</span>
-                  {item.verified && (
-                    <div className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-600 rounded-lg border border-green-100">
-                      <Shield className="w-2.5 h-2.5" />
-                      <span className="text-[8px] font-black uppercase">Verified</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <h4 className="text-2xl font-black mb-2 text-gray-900">{item.name}</h4>
-              <div className="grid grid-cols-2 gap-4 mb-10">
-                <div className="p-4 bg-gray-50 rounded-2xl">
-                  <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Impact</p>
-                  <p className="font-black text-gray-900">{item.impact}</p>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-2xl">
-                  <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Protocol</p>
-                  <p className="font-black text-xs text-gray-900 truncate">{item.protocol}</p>
-                </div>
-              </div>
-              <button
-                onClick={async () => {
-                  try {
-                    toast.loading(`Deploying ${item.name}...`, { id: 'deploy' })
-                    const hash = await writeContractAsync({
-                      address: META_ARMY_ADDRESS,
-                      abi: META_ARMY_ABI,
-                      functionName: 'createSwarmBundle',
-                      args: [`Deploy ${item.name} Agent`, []]
-                    })
-                    toast.success(
-                      <div className="flex flex-col gap-1">
-                        <span className="font-bold">Agent Deployed!</span>
-                        <a href={`https://sepolia.etherscan.io/tx/${hash}`} target="_blank" className="text-xs underline text-indigo-600">View on Etherscan ↗</a>
-                      </div>,
-                      { id: 'deploy', duration: 8000 }
-                    )
-                  } catch (e) {
-                    toast.error('Deploy Failed', { id: 'deploy' })
-                  }
-                }}
-                className="w-full py-5 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-metamask-600 transition-all active:scale-95"
-              >
-                Deploy Agent
-              </button>
-            </div>
-          ))}
+        <div className="text-center py-20">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Activity className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-xl font-black text-gray-900 mb-4">PilotHub</h3>
+          <p className="text-gray-500 mb-8 max-w-md mx-auto">
+            Advanced agent configuration and deployment tools coming soon.
+          </p>
         </div>
-      )
-      }
-    </div >
+      )}
+    </div>
   )
 }
 // Meta-Pilot Dashboard v3.0 Final Polish
