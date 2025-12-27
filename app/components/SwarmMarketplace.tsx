@@ -102,14 +102,12 @@ export function SwarmMarketplace() {
 
     const checkBundleStatus = async (bundleId: string): Promise<boolean> => {
         try {
-            console.log('🔍 Checking bundle status for:', bundleId)
             
             // Convert transaction hash to proper bytes32 format for bundle ID
             let properBundleId: `0x${string}`
             if (bundleId.startsWith('0x') && bundleId.length === 66) {
                 properBundleId = bundleId as `0x${string}`
             } else {
-                console.error('❌ Invalid bundle ID format:', bundleId)
                 return false
             }
             
@@ -126,23 +124,18 @@ export function SwarmMarketplace() {
             })
             
             if (!response.ok) {
-                console.error('❌ Contract read failed:', response.status)
                 return false
             }
             
             const result = await response.json()
-            console.log('📋 Bundle data from contract:', result)
             
             // Check if bundle exists and is active
             if (result && result[0] && result[0] !== '0x0000000000000000000000000000000000000000') {
-                console.log('✅ Bundle exists and is valid')
                 return result[3] === true || result[3] === 'true' // Check active status
             } else {
-                console.log('❌ Bundle does not exist on contract')
                 return false
             }
         } catch (error) {
-            console.error('❌ Bundle status check failed:', error)
             return false
         }
     }
@@ -346,7 +339,6 @@ export function SwarmMarketplace() {
                     setDeployedSwarms([])
                 }
             } catch (error) {
-                console.error('❌ Failed to fetch deployed swarms:', error)
                 setDeployedSwarms([])
             } finally {
                 setLoading(false)
@@ -417,17 +409,9 @@ export function SwarmMarketplace() {
             
             toast.loading(`Executing ${swarm.goal}...`, { id: 'execute' })
             
-            console.log('🚀 Executing swarm:', {
-                bundleId: swarm.bundleId,
-                goal: swarm.goal,
-                totalActions: swarm.totalActions
-            })
-            
             // Create ZK proof hashes array matching the number of actions
             // For demo purposes, we'll use empty hashes (0x0000...)
             const zkProofHashes: `0x${string}`[] = Array(swarm.totalActions).fill('0x0000000000000000000000000000000000000000000000000000000000000000')
-            
-            console.log('📝 ZK Proof hashes:', zkProofHashes)
             
             // Convert transaction hash to proper bytes32 format for bundle ID
             let bundleId: `0x${string}`
@@ -438,8 +422,6 @@ export function SwarmMarketplace() {
                 bundleId = `0x${swarm.bundleId.padStart(64, '0')}` as `0x${string}`
             }
             
-            console.log('🔑 Bundle ID:', bundleId)
-            
             const txHash = await writeContractAsync({
                 address: META_ARMY_ADDRESS,
                 abi: META_ARMY_ABI,
@@ -447,8 +429,6 @@ export function SwarmMarketplace() {
                 args: [bundleId, zkProofHashes],
                 gas: BigInt(1000000), // Increased gas limit
             })
-
-            console.log('✅ Transaction sent:', txHash)
 
             toast.success(
                 <div className="flex flex-col gap-1">
@@ -466,7 +446,6 @@ export function SwarmMarketplace() {
             ))
 
         } catch (error: any) {
-            console.error('❌ Execute failed:', error)
             
             let errorMessage = 'Execution failed. '
             

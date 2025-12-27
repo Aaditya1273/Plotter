@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error: any) {
-    console.error('❌ Contract read error:', error)
     
     return NextResponse.json(
       { error: `Contract read failed: ${error.message}` },

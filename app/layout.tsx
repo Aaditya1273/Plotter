@@ -6,6 +6,11 @@ import { Toaster } from 'react-hot-toast'
 export const metadata: Metadata = {
   title: 'MetaArmy - Intent-Driven DeFi Automation',
   description: 'Autonomous wealth management powered by MetaMask Advanced Permissions',
+  icons: {
+    icon: '/new/logo.png',
+    shortcut: '/new/logo.png',
+    apple: '/new/logo.png',
+  },
 }
 
 export default function RootLayout({

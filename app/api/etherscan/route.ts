@@ -46,9 +46,6 @@ export async function GET(request: NextRequest) {
     
     const data = await response.json()
     
-    console.log('📡 Etherscan API response status:', data.status)
-    console.log('📊 Transaction count:', data.result?.length || 0)
-    
     return NextResponse.json(data, {
       headers: {
         'Access-Control-Allow-Origin': '*',
@@ -58,7 +55,6 @@ export async function GET(request: NextRequest) {
     })
     
   } catch (error: any) {
-    console.error('❌ Etherscan API route error:', error)
     
     if (error.name === 'AbortError') {
       return NextResponse.json(

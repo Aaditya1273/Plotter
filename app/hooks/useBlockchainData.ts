@@ -125,17 +125,13 @@ export function useTransactionHistory() {
         const fetchMetaArmyHistory = async () => {
             setLoading(true)
             try {
-                console.log('📊 Fetching transaction history for:', address)
                 
                 // Fetch MetaArmy contract transactions from our API route
                 const metaArmyAddress = process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0'
                 
-                console.log('📋 MetaArmy contract:', metaArmyAddress)
-                
                 // Fetch user's transactions directly from Etherscan
                 const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
                 if (!apiKey) {
-                    console.error('❌ Etherscan API key not configured')
                     return []
                 }
                 
@@ -149,16 +145,12 @@ export function useTransactionHistory() {
                 
                 const txData = await response.json()
 
-                console.log('📡 Transaction API response:', txData)
-
                 // Check for any API errors
                 if (txData.status === '0') {
                     if (txData.message === 'NOTOK') {
-                        console.error('❌ Etherscan API error for history:', txData.result)
                         
                         // If it's a V1 deprecation error, try alternative approach
                         if (txData.result?.includes('deprecated') || txData.result?.includes('V1 endpoint')) {
-                            console.warn('⚠️ Etherscan V1 deprecation detected for history, trying alternative...')
                             
                             // Try using the /api/etherscan route instead
                             try {
@@ -166,21 +158,17 @@ export function useTransactionHistory() {
                                 if (altResponse.ok) {
                                     const altData = await altResponse.json()
                                     if (altData.status === '1' && altData.result) {
-                                        console.log('✅ Alternative API route worked for history')
                                         txData.status = '1'
                                         txData.result = altData.result
                                     } else {
-                                        console.error('❌ Alternative API also failed for history:', altData)
                                         setHistory([])
                                         return
                                     }
                                 } else {
-                                    console.error('❌ Alternative API route failed for history')
                                     setHistory([])
                                     return
                                 }
                             } catch (altError) {
-                                console.error('❌ Alternative API error for history:', altError)
                                 setHistory([])
                                 return
                             }
@@ -189,7 +177,6 @@ export function useTransactionHistory() {
                             return
                         }
                     } else {
-                        console.error('❌ Etherscan API returned status 0 for history:', txData)
                         setHistory([])
                         return
                     }
@@ -200,8 +187,6 @@ export function useTransactionHistory() {
                     const metaArmyTxs = txData.result.filter((tx: any) => {
                         const isToContract = tx.to?.toLowerCase() === metaArmyAddress.toLowerCase()
                         const isSuccessful = tx.isError === '0'
-                        
-                        console.log(`🔍 TX ${tx.hash.substring(0, 10)}... - To: ${tx.to}, Success: ${isSuccessful}, ToContract: ${isToContract}`)
                         
                         return isToContract && isSuccessful
                     }).slice(0, 10)
@@ -256,14 +241,11 @@ export function useTransactionHistory() {
                         }
                     })
 
-                    console.log('🎯 Processed history:', processedHistory)
                     setHistory(processedHistory)
                 } else {
-                    console.log('❌ No transactions found or API error:', txData)
                     setHistory([])
                 }
             } catch (error) {
-                console.error('💥 Failed to fetch MetaArmy history:', error)
                 setHistory([])
             } finally {
                 setLoading(false)
