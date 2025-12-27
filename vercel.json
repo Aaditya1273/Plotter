@@ -1,16 +1,10 @@
 {
-  "buildCommand": "npm install --legacy-peer-deps && npm run build",
-  "outputDirectory": ".next",
   "framework": "nextjs",
+  "buildCommand": "npm run build",
   "installCommand": "npm install --legacy-peer-deps",
-  "devCommand": "npm run dev",
-  "regions": ["iad1"],
   "functions": {
     "app/**/*.ts": {
       "maxDuration": 30
     }
-  },
-  "env": {
-    "NODE_ENV": "production"
   }
 }
