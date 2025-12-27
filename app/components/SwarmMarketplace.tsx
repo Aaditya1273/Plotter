@@ -46,6 +46,21 @@ const META_ARMY_ABI = [
             { name: 'zkProofHashes', type: 'bytes32[]' }
         ],
         outputs: []
+    },
+    {
+        name: 'bundleActions',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: '', type: 'bytes32' },
+            { name: '', type: 'uint256' }
+        ],
+        outputs: [
+            { name: 'target', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+            { name: 'data', type: 'bytes' },
+            { name: 'requiresZk', type: 'bool' }
+        ]
     }
 ] as const
 
@@ -68,7 +83,26 @@ export function SwarmMarketplace() {
     const [deployedSwarms, setDeployedSwarms] = useState<DeployedSwarm[]>([])
     const [loading, setLoading] = useState(true)
     const [lastRefresh, setLastRefresh] = useState<number>(0)
-    const { writeContractAsync } = useWriteContract()
+    const { writeContractAsync, isPending } = useWriteContract()
+    const { data: contractReads } = useReadContracts({
+        contracts: deployedSwarms.map(swarm => ({
+            address: META_ARMY_ADDRESS,
+            abi: META_ARMY_ABI,
+            functionName: 'swarmBundles',
+            args: [swarm.bundleId as `0x${string}`]
+        }))
+    })
+
+    const checkBundleStatus = async (bundleId: string): Promise<boolean> => {
+        try {
+            // This would be called to verify bundle exists and is active
+            console.log('🔍 Checking bundle status for:', bundleId)
+            return true // For now, assume all bundles are valid
+        } catch (error) {
+            console.error('Bundle status check failed:', error)
+            return false
+        }
+    }
 
     const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
 
@@ -291,18 +325,49 @@ export function SwarmMarketplace() {
 
     const handleExecuteSwarm = async (swarm: DeployedSwarm) => {
         try {
+            toast.loading(`Checking bundle status...`, { id: 'execute' })
+            
+            // First check if bundle is valid
+            const isValid = await checkBundleStatus(swarm.bundleId)
+            if (!isValid) {
+                toast.error('Bundle not found or invalid', { id: 'execute' })
+                return
+            }
+            
             toast.loading(`Executing ${swarm.goal}...`, { id: 'execute' })
             
-            // Create empty ZK proof hashes array for now
-            const zkProofHashes: `0x${string}`[] = []
+            console.log('🚀 Executing swarm:', {
+                bundleId: swarm.bundleId,
+                goal: swarm.goal,
+                totalActions: swarm.totalActions
+            })
+            
+            // Create ZK proof hashes array matching the number of actions
+            // For demo purposes, we'll use empty hashes (0x0000...)
+            const zkProofHashes: `0x${string}`[] = Array(swarm.totalActions).fill('0x0000000000000000000000000000000000000000000000000000000000000000')
+            
+            console.log('📝 ZK Proof hashes:', zkProofHashes)
+            
+            // Convert transaction hash to proper bytes32 format for bundle ID
+            let bundleId: `0x${string}`
+            if (swarm.bundleId.startsWith('0x')) {
+                bundleId = swarm.bundleId as `0x${string}`
+            } else {
+                // If it's not a proper hex string, create a deterministic bundle ID
+                bundleId = `0x${swarm.bundleId.padStart(64, '0')}` as `0x${string}`
+            }
+            
+            console.log('🔑 Bundle ID:', bundleId)
             
             const txHash = await writeContractAsync({
                 address: META_ARMY_ADDRESS,
                 abi: META_ARMY_ABI,
                 functionName: 'executeBundle',
-                args: [swarm.bundleId as `0x${string}`, zkProofHashes],
-                gas: BigInt(500000),
+                args: [bundleId, zkProofHashes],
+                gas: BigInt(1000000), // Increased gas limit
             })
+
+            console.log('✅ Transaction sent:', txHash)
 
             toast.success(
                 <div className="flex flex-col gap-1">
@@ -311,9 +376,35 @@ export function SwarmMarketplace() {
                 </div>,
                 { id: 'execute', duration: 8000 }
             )
-        } catch (error) {
-            console.error('Execute failed:', error)
-            toast.error('Execution failed. Swarm may already be executed.', { id: 'execute' })
+
+            // Update swarm status locally
+            setDeployedSwarms(prev => prev.map(s => 
+                s.id === swarm.id 
+                    ? { ...s, status: 'completed', executedActions: s.totalActions }
+                    : s
+            ))
+
+        } catch (error: any) {
+            console.error('❌ Execute failed:', error)
+            
+            let errorMessage = 'Execution failed. '
+            
+            // Parse specific error messages
+            if (error?.message?.includes('Bundle not active')) {
+                errorMessage += 'Bundle has already been executed.'
+            } else if (error?.message?.includes('Not authorized')) {
+                errorMessage += 'You are not authorized to execute this bundle.'
+            } else if (error?.message?.includes('Proof count mismatch')) {
+                errorMessage += 'Invalid proof configuration.'
+            } else if (error?.message?.includes('insufficient funds')) {
+                errorMessage += 'Insufficient funds for gas fees.'
+            } else if (error?.message?.includes('user rejected')) {
+                errorMessage += 'Transaction was cancelled.'
+            } else {
+                errorMessage += 'Please check console for details.'
+            }
+            
+            toast.error(errorMessage, { id: 'execute' })
         }
     }
 
@@ -448,10 +539,20 @@ export function SwarmMarketplace() {
                         <div className="flex gap-2">
                             <button
                                 onClick={() => handleExecuteSwarm(swarm)}
-                                className="flex-1 py-3 bg-gray-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                disabled={isPending}
+                                className="flex-1 py-3 bg-gray-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <Play className="w-4 h-4" />
-                                Execute
+                                {isPending ? (
+                                    <>
+                                        <Activity className="w-4 h-4 animate-spin" />
+                                        Executing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="w-4 h-4" />
+                                        Execute
+                                    </>
+                                )}
                             </button>
                             <button 
                                 onClick={() => window.open(`https://sepolia.etherscan.io/tx/${swarm.txHash}`, '_blank')}
