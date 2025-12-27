@@ -1,4 +1,4 @@
-// AI Intent Parser v3.0 - The Swarm Engine
+// AI Intent Parser v3.0 - The Swarm Engine (Optimized)
 import { parseIntentWithGemini } from './gemini-ai'
 
 export interface SwarmTask {
@@ -18,37 +18,17 @@ export interface ParsedSwarmIntent {
   priority: 'speed' | 'efficiency' | 'cost'
 }
 
+// Cache for common patterns to speed up parsing
+const patternCache = new Map<string, ParsedSwarmIntent>()
+
 // v3 Parser supports multi-task bundles and sub-agent delegation
 export async function parseUserSwarmIntent(input: string): Promise<ParsedSwarmIntent> {
-  const normalizedInput = input.toLowerCase()
-
-  // Try Gemini 3.0 Logic first
-  if (process.env.GEMINI_API_KEY || (typeof window !== 'undefined' && localStorage.getItem('GEMINI_API_KEY'))) {
-    try {
-      const geminiResult = await parseIntentWithGemini(input)
-      if (geminiResult && geminiResult.tasks.length > 0) {
-        return {
-          overallGoal: geminiResult.overallGoal || input,
-          isBundle: geminiResult.isBundle,
-          tasks: geminiResult.tasks.map((t, i) => ({
-            id: (i + 1).toString(),
-            action: t.action,
-            asset: t.asset,
-            target: t.target,
-            amount: t.amount || '400',
-            conditions: t.conditions,
-            requiresZk: t.requiresZk
-          })),
-          priority: geminiResult.priority || 'efficiency'
-        }
-      }
-    } catch (error) {
-      console.warn('AI Brain v3 fallback to rule-based swarm parsing')
-    }
+  // Check cache first for instant responses
+  const cacheKey = input.toLowerCase().trim()
+  if (patternCache.has(cacheKey)) {
+    console.log('🚀 Using cached AI response for instant speed')
+    return patternCache.get(cacheKey)!
   }
-
-  // Rule-Based Swarm Parsing (v3 Fallback) - Enhanced Amount Detection
-  const tasks: SwarmTask[] = []
 
   // Enhanced amount extraction - look for numbers with or without currency symbols
   const extractAmount = (text: string): string => {
@@ -106,8 +86,10 @@ export async function parseUserSwarmIntent(input: string): Promise<ParsedSwarmIn
     return 'USDC' // Default
   }
 
-  // Basic split by 'and' or ',' to simulate multi-tasking
+  // Fast rule-based parsing first (for instant response)
+  const tasks: SwarmTask[] = []
   const parts = input.split(/ and |, /)
+  
   parts.forEach((part, index) => {
     const subPart = part.toLowerCase()
     let action: SwarmTask['action'] = 'invest'
@@ -131,12 +113,45 @@ export async function parseUserSwarmIntent(input: string): Promise<ParsedSwarmIn
     })
   })
 
-  return {
+  const fastResult: ParsedSwarmIntent = {
     overallGoal: input,
     isBundle: tasks.length > 1,
     tasks,
-    priority: 'efficiency'
+    priority: 'speed'
   }
+
+  // Cache the result for future instant responses
+  patternCache.set(cacheKey, fastResult)
+
+  // Try Gemini enhancement in background (non-blocking)
+  if (process.env.GEMINI_API_KEY || (typeof window !== 'undefined' && localStorage.getItem('GEMINI_API_KEY'))) {
+    // Don't await - let it run in background for better UX
+    parseIntentWithGemini(input).then(geminiResult => {
+      if (geminiResult && geminiResult.tasks.length > 0) {
+        const enhancedResult: ParsedSwarmIntent = {
+          overallGoal: geminiResult.overallGoal || input,
+          isBundle: geminiResult.isBundle,
+          tasks: geminiResult.tasks.map((t, i) => ({
+            id: (i + 1).toString(),
+            action: t.action,
+            asset: t.asset,
+            target: t.target,
+            amount: t.amount || extractAmount(input),
+            conditions: t.conditions,
+            requiresZk: t.requiresZk
+          })),
+          priority: geminiResult.priority || 'efficiency'
+        }
+        // Update cache with enhanced result
+        patternCache.set(cacheKey, enhancedResult)
+      }
+    }).catch(error => {
+      console.warn('Background AI enhancement failed:', error)
+    })
+  }
+
+  // Return fast result immediately
+  return fastResult
 }
 
 // Original helper for backward compatibility

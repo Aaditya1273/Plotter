@@ -127,36 +127,73 @@ export function useTransactionHistory() {
             try {
                 console.log('📊 Fetching transaction history for:', address)
                 
-                // Fetch MetaArmy contract transactions from Etherscan
+                // Fetch MetaArmy contract transactions from our API route
                 const metaArmyAddress = process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0'
-                const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
-                
-                if (!apiKey) {
-                    console.error('❌ Etherscan API key not configured')
-                    return
-                }
                 
                 console.log('📋 MetaArmy contract:', metaArmyAddress)
                 
-                // Fetch user's transactions to MetaArmy contract with better error handling
-                const txResponse = await fetch(
-                    `https://api.etherscan.io/v2/api?chainid=11155111&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`,
-                    {
-                        method: 'GET',
-                        headers: {
-                            'Accept': 'application/json',
-                        },
-                        signal: AbortSignal.timeout(10000) // 10 second timeout
-                    }
-                )
-                
-                if (!txResponse.ok) {
-                    throw new Error(`Etherscan API error: ${txResponse.status}`)
+                // Fetch user's transactions directly from Etherscan
+                const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
+                if (!apiKey) {
+                    console.error('❌ Etherscan API key not configured')
+                    return []
                 }
                 
-                const txData = await txResponse.json()
+                const response = await fetch(
+                    `https://api.etherscan.io/v2/api?chainid=11155111&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
+                )
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`)
+                }
+                
+                const txData = await response.json()
 
                 console.log('📡 Transaction API response:', txData)
+
+                // Check for any API errors
+                if (txData.status === '0') {
+                    if (txData.message === 'NOTOK') {
+                        console.error('❌ Etherscan API error for history:', txData.result)
+                        
+                        // If it's a V1 deprecation error, try alternative approach
+                        if (txData.result?.includes('deprecated') || txData.result?.includes('V1 endpoint')) {
+                            console.warn('⚠️ Etherscan V1 deprecation detected for history, trying alternative...')
+                            
+                            // Try using the /api/etherscan route instead
+                            try {
+                                const altResponse = await fetch(`/api/etherscan?address=${address}`)
+                                if (altResponse.ok) {
+                                    const altData = await altResponse.json()
+                                    if (altData.status === '1' && altData.result) {
+                                        console.log('✅ Alternative API route worked for history')
+                                        txData.status = '1'
+                                        txData.result = altData.result
+                                    } else {
+                                        console.error('❌ Alternative API also failed for history:', altData)
+                                        setHistory([])
+                                        return
+                                    }
+                                } else {
+                                    console.error('❌ Alternative API route failed for history')
+                                    setHistory([])
+                                    return
+                                }
+                            } catch (altError) {
+                                console.error('❌ Alternative API error for history:', altError)
+                                setHistory([])
+                                return
+                            }
+                        } else {
+                            setHistory([])
+                            return
+                        }
+                    } else {
+                        console.error('❌ Etherscan API returned status 0 for history:', txData)
+                        setHistory([])
+                        return
+                    }
+                }
 
                 if (txData.status === '1' && txData.result) {
                     // Filter transactions to MetaArmy contract

@@ -84,6 +84,8 @@ export function SwarmMarketplace() {
     const [loading, setLoading] = useState(true)
     const [lastRefresh, setLastRefresh] = useState<number>(0)
     const { writeContractAsync, isPending } = useWriteContract()
+
+    const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
     
     // Initialize contract reads only when we have swarms to read
     const { data: contractReads } = useReadContracts({
@@ -100,94 +102,159 @@ export function SwarmMarketplace() {
 
     const checkBundleStatus = async (bundleId: string): Promise<boolean> => {
         try {
-            // This would be called to verify bundle exists and is active
             console.log('🔍 Checking bundle status for:', bundleId)
-            return true // For now, assume all bundles are valid
+            
+            // Convert transaction hash to proper bytes32 format for bundle ID
+            let properBundleId: `0x${string}`
+            if (bundleId.startsWith('0x') && bundleId.length === 66) {
+                properBundleId = bundleId as `0x${string}`
+            } else {
+                console.error('❌ Invalid bundle ID format:', bundleId)
+                return false
+            }
+            
+            // Try to read the bundle from contract
+            const response = await fetch('/api/contract-read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address: META_ARMY_ADDRESS,
+                    abi: META_ARMY_ABI,
+                    functionName: 'swarmBundles',
+                    args: [properBundleId]
+                })
+            })
+            
+            if (!response.ok) {
+                console.error('❌ Contract read failed:', response.status)
+                return false
+            }
+            
+            const result = await response.json()
+            console.log('📋 Bundle data from contract:', result)
+            
+            // Check if bundle exists and is active
+            if (result && result[0] && result[0] !== '0x0000000000000000000000000000000000000000') {
+                console.log('✅ Bundle exists and is valid')
+                return result[3] === true || result[3] === 'true' // Check active status
+            } else {
+                console.log('❌ Bundle does not exist on contract')
+                return false
+            }
         } catch (error) {
-            console.error('Bundle status check failed:', error)
+            console.error('❌ Bundle status check failed:', error)
             return false
         }
     }
-
-    const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
 
     const fetchDeployedSwarms = async () => {
         if (!address) return
 
         setLoading(true)
         try {
+            // Fetch user's transaction history to find swarm deployments
+            const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
+            
+            if (!apiKey) {
+                console.error('❌ Etherscan API key not configured')
+                toast.error('API configuration error. Please contact support.')
+                setLoading(false)
+                return
+            }
+            
             console.log('🔍 Fetching swarms for address:', address)
             console.log('📋 MetaArmy contract address:', META_ARMY_ADDRESS)
             
-            // Use local API route instead of direct Etherscan call
-            const response = await fetch(`/api/etherscan?address=${address}`, {
+            const apiUrl = `https://api.etherscan.io/v2/api?chainid=11155111&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
+            
+            const response = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
+                    'User-Agent': 'MetaArmy/1.0'
                 },
             })
             
-            console.log('📡 API Response Status:', response.status, response.statusText)
-            
             if (!response.ok) {
-                const errorText = await response.text()
-                console.error('❌ API Error Response:', errorText)
-                throw new Error(`API error: ${response.status} - ${errorText}`)
+                throw new Error(`Etherscan API HTTP error: ${response.status}`)
             }
             
             const data = await response.json()
 
-            console.log('📡 Full API response:', data)
-
-            if (data.error) {
-                console.error('❌ API returned error:', data.error)
-                throw new Error(data.error)
+            // Check for any API errors
+            if (data.status === '0') {
+                if (data.message === 'NOTOK') {
+                    
+                    // If it's a V1 deprecation error, try alternative approach
+                    if (data.result?.includes('deprecated') || data.result?.includes('V1 endpoint')) {
+                        
+                        // Try using the /api/etherscan route instead
+                        try {
+                            const altResponse = await fetch(`/api/etherscan?address=${address}`)
+                            if (altResponse.ok) {
+                                const altData = await altResponse.json()
+                                if (altData.status === '1' && altData.result) {
+                                    data.status = '1'
+                                    data.result = altData.result
+                                } else {
+                                    setDeployedSwarms([])
+                                    setLastRefresh(Date.now())
+                                    return
+                                }
+                            } else {
+                                setDeployedSwarms([])
+                                setLastRefresh(Date.now())
+                                return
+                            }
+                        } catch (altError) {
+                            setDeployedSwarms([])
+                            setLastRefresh(Date.now())
+                            return
+                        }
+                    } else {
+                        setDeployedSwarms([])
+                        setLastRefresh(Date.now())
+                        return
+                    }
+                } else {
+                    setDeployedSwarms([])
+                    setLastRefresh(Date.now())
+                    return
+                }
             }
 
             if (data.status === '1' && data.result) {
-                console.log('📊 Total transactions found:', data.result.length)
-                
-                // Filter transactions to MetaArmy contract
+                // Filter transactions to MetaArmy contract that are swarm bundle creations
                 const metaArmyTxs = data.result.filter((tx: any) => {
                     const isToContract = tx.to?.toLowerCase() === META_ARMY_ADDRESS.toLowerCase()
                     const isSuccessful = tx.isError === '0'
                     
-                    console.log(`🔍 TX ${tx.hash.substring(0, 10)}... - To: ${tx.to}, Success: ${isSuccessful}, ToContract: ${isToContract}`)
+                    // Check if it's a createSwarmBundle transaction by looking at function signature
+                    let isSwarmBundleCreation = false
+                    if (tx.input && tx.input.length > 10) {
+                        // createSwarmBundle(string,tuple[]) = 0x4a4fbeec (approximate - need to verify)
+                        // createSwarmBundleSafe(string,tuple[],uint256) = different signature
+                        // For now, check if it's a contract interaction with significant input data
+                        isSwarmBundleCreation = tx.input.length > 200 // Swarm bundles have substantial data
+                    }
                     
-                    return isToContract && isSuccessful
+                    return isToContract && isSuccessful && isSwarmBundleCreation
                 })
                 
                 console.log('✅ Found MetaArmy transactions:', metaArmyTxs.length)
-                
-                if (metaArmyTxs.length === 0) {
-                    console.log('⚠️ No transactions found to MetaArmy contract. Have you deployed any swarms via Chat?')
-                    console.log('💡 Expected contract address:', META_ARMY_ADDRESS)
-                    console.log('💡 Your address:', address)
-                    console.log('💡 To deploy a swarm: Go to Chat → Type "invest 10 USDC in DeFi" → Approve')
-                }
-                
-                console.log('📝 Transaction details:', metaArmyTxs)
 
                 // Convert transactions to swarm objects
                 const swarms: DeployedSwarm[] = metaArmyTxs.map((tx: any, index: number) => {
+
                         // Determine swarm type based on transaction data or goal
                         let type: DeployedSwarm['type'] = 'defi'
                         let goal = 'Swarm Bundle Deployed'
                         let impact = 'Active'
                         let protocol = 'MetaArmy'
 
-                        console.log(`🔍 Processing transaction ${index + 1}:`, {
-                            hash: tx.hash,
-                            input: tx.input?.substring(0, 100) + '...',
-                            value: tx.value,
-                            timestamp: tx.timeStamp
-                        })
-
                         // Parse transaction input to determine swarm type
                         if (tx.input && tx.input.length > 200) {
                             const inputData = tx.input.toLowerCase()
-                            
-                            console.log('📝 Parsing transaction input:', inputData.substring(0, 100) + '...')
                             
                             // Look for common patterns in the transaction data
                             if (inputData.includes('6e6674') || inputData.includes('736e697065') || inputData.includes('6f70656e736561')) {
@@ -245,7 +312,7 @@ export function SwarmMarketplace() {
                                         }
                                     }
                                 } catch (decodeError) {
-                                    console.log('⚠️ Could not decode transaction data, using defaults')
+                                    // Could not decode transaction data, using defaults
                                 }
                             }
                         } else {
@@ -260,7 +327,7 @@ export function SwarmMarketplace() {
 
                         return {
                             id: `swarm-${index}`,
-                            bundleId: tx.hash, // Use tx hash as bundle ID for now
+                            bundleId: `0x${tx.hash.substring(2)}`, // Remove 0x and re-add to ensure proper format
                             goal,
                             type,
                             status: 'active' as const,
@@ -273,25 +340,13 @@ export function SwarmMarketplace() {
                         }
                     })
 
-                    console.log('🎯 Final swarms array:', swarms)
                     setDeployedSwarms(swarms)
                     setLastRefresh(Date.now())
                 } else {
-                    console.log('❌ No transactions found or API error:', data)
                     setDeployedSwarms([])
                 }
-            } catch (error: any) {
+            } catch (error) {
                 console.error('❌ Failed to fetch deployed swarms:', error)
-                
-                // Show specific error messages
-                if (error.message?.includes('Network error')) {
-                    toast.error('Network connection issue. Check your internet connection.')
-                } else if (error.message?.includes('timeout')) {
-                    toast.error('Request timed out. Etherscan API is slow.')
-                } else {
-                    toast.error('Failed to load swarms. Please try again.')
-                }
-                
                 setDeployedSwarms([])
             } finally {
                 setLoading(false)
@@ -349,7 +404,14 @@ export function SwarmMarketplace() {
             // First check if bundle is valid
             const isValid = await checkBundleStatus(swarm.bundleId)
             if (!isValid) {
-                toast.error('Bundle not found or invalid', { id: 'execute' })
+                toast.error(
+                    <div className="flex flex-col gap-1">
+                        <span className="font-bold">Bundle Not Found</span>
+                        <span className="text-xs">This transaction may not be a swarm bundle deployment, or the bundle has been executed already.</span>
+                        <a href={`https://sepolia.etherscan.io/tx/${swarm.txHash}`} target="_blank" className="text-xs underline text-indigo-600">View Transaction ↗</a>
+                    </div>,
+                    { id: 'execute', duration: 8000 }
+                )
                 return
             }
             

@@ -254,45 +254,78 @@ Respond naturally and helpfully.
     const currentInput = input
     setInput('')
 
+    // Add instant "thinking" response for better UX
+    const thinkingMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      type: 'ai',
+      content: '🤖 Analyzing your request...',
+      timestamp: new Date()
+    }
+    
+    setMessages(prev => [...prev, thinkingMessage])
+
     try {
-      // First, determine if this is a swarm deployment intent or just conversation
+      // Fast intent detection first
       const isSwarmIntent = await isSwarmDeploymentIntent(currentInput)
       
       if (isSwarmIntent) {
+        // Update thinking message
+        setMessages(prev => prev.map(msg => 
+          msg.id === thinkingMessage.id 
+            ? { ...msg, content: '🎯 Preparing swarm bundle...' }
+            : msg
+        ))
+
         // Parse as swarm intent and show review modal
         const swarmIntent = await parseUserSwarmIntent(currentInput)
         setPendingSwarm(swarmIntent)
         setShowReviewModal(true)
         
-        // Add AI response about the swarm
+        // Replace thinking message with final response
         const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: thinkingMessage.id, // Reuse ID to replace thinking message
           type: 'ai',
-          content: `I've analyzed your request and prepared a swarm bundle: "${swarmIntent.overallGoal}". Please review the actions before deployment.`,
+          content: `✨ **Swarm Bundle Ready**\n\nI've analyzed your request: "${swarmIntent.overallGoal}"\n\n${generateSwarmDescription(swarmIntent)}\n\n*Please review the actions before deployment.*`,
           timestamp: new Date()
         }
-        setMessages(prev => [...prev, aiMessage])
+        setMessages(prev => prev.map(msg => 
+          msg.id === thinkingMessage.id ? aiMessage : msg
+        ))
       } else {
+        // Update thinking message for conversation
+        setMessages(prev => prev.map(msg => 
+          msg.id === thinkingMessage.id 
+            ? { ...msg, content: '💭 Thinking about your question...' }
+            : msg
+        ))
+
         // Handle as normal conversation using Gemini AI
         const aiResponse = await generateConversationalResponse(currentInput)
         
+        // Replace thinking message with final response
         const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: thinkingMessage.id, // Reuse ID to replace thinking message
           type: 'ai',
           content: aiResponse,
           timestamp: new Date()
         }
-        setMessages(prev => [...prev, aiMessage])
+        setMessages(prev => prev.map(msg => 
+          msg.id === thinkingMessage.id ? aiMessage : msg
+        ))
       }
     } catch (error) {
       console.error('Chat error:', error)
+      
+      // Replace thinking message with error
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: thinkingMessage.id, // Reuse ID to replace thinking message
         type: 'ai',
         content: "I'm having trouble processing that request. Could you try rephrasing it?",
         timestamp: new Date()
       }
-      setMessages(prev => [...prev, errorMessage])
+      setMessages(prev => prev.map(msg => 
+        msg.id === thinkingMessage.id ? errorMessage : msg
+      ))
     } finally {
       setIsLoading(false)
     }
@@ -481,7 +514,8 @@ Respond naturally and helpfully.
                 </button>
                 <button 
                   onClick={handleConfirmSwarm} 
-                  className="flex-1 px-6 py-4 rounded-2xl bg-gray-900 text-white font-black uppercase tracking-widest hover:bg-metamask-600 shadow-xl transition-all active:scale-[0.98]"
+                  disabled={!pendingSwarm}
+                  className="flex-1 px-6 py-4 rounded-2xl bg-gray-900 text-white font-black uppercase tracking-widest hover:bg-metamask-600 shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Launch Swarm
                 </button>

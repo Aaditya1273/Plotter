@@ -7,9 +7,6 @@ import {
     Wallet,
     History,
     Gavel,
-    Users,
-    ExternalLink,
-    Clock,
     TrendingUp,
     Zap,
     Shield,
@@ -40,8 +37,7 @@ export function SearchSystem({ onNavigate }: SearchSystemProps) {
     const [results, setResults] = useState<SearchResult[]>([])
     const [selectedIndex, setSelectedIndex] = useState(0)
     const inputRef = useRef<HTMLInputElement>(null)
-    const { address } = useAccount()
-    const { balances, totalNetWorth } = useBlockchainData()
+    const { balances } = useBlockchainData()
     const { history } = useTransactionHistory()
 
     // Memoize searchable data to prevent infinite re-renders

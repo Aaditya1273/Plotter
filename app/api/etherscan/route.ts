@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
     
     console.log('🔍 Fetching transactions for address:', address)
     
-    // Use Sepolia Etherscan API with proper error handling
-    const etherscanUrl = `https://api-sepolia.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
+    // Use Sepolia Etherscan API V2 with proper error handling
+    const etherscanUrl = `https://api.etherscan.io/v2/api?chainid=11155111&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
     
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
