@@ -47,19 +47,20 @@ export function SearchSystem({ onNavigate }: SearchSystemProps) {
     // Memoize searchable data to prevent infinite re-renders
     const searchableData = useMemo(() => [
         // Commands
-        { type: 'command', title: 'Deploy New Swarm', description: 'Create and deploy a new swarm bundle', icon: Bot, color: 'text-purple-600', action: () => onNavigate?.('chat') },
-        { type: 'command', title: 'View Portfolio', description: 'Check your asset balances and portfolio value', icon: Wallet, color: 'text-green-600', action: () => onNavigate?.('assets') },
-        { type: 'command', title: 'Transaction History', description: 'View your recent MetaArmy transactions', icon: History, color: 'text-orange-600', action: () => onNavigate?.('history') },
-        { type: 'command', title: 'Governance Portal', description: 'Vote on DAO proposals and governance', icon: Gavel, color: 'text-purple-600', action: () => onNavigate?.('governance') },
-        { type: 'command', title: 'Army Configuration', description: 'Configure risk settings and preferences', icon: Shield, color: 'text-blue-600', action: () => onNavigate?.('settings') },
+        { id: 'cmd-deploy', type: 'command' as const, title: 'Deploy New Swarm', description: 'Create and deploy a new swarm bundle', icon: Bot, color: 'text-purple-600', action: () => onNavigate?.('chat') },
+        { id: 'cmd-portfolio', type: 'command' as const, title: 'View Portfolio', description: 'Check your asset balances and portfolio value', icon: Wallet, color: 'text-green-600', action: () => onNavigate?.('assets') },
+        { id: 'cmd-history', type: 'command' as const, title: 'Transaction History', description: 'View your recent MetaArmy transactions', icon: History, color: 'text-orange-600', action: () => onNavigate?.('history') },
+        { id: 'cmd-governance', type: 'command' as const, title: 'Governance Portal', description: 'Vote on DAO proposals and governance', icon: Gavel, color: 'text-purple-600', action: () => onNavigate?.('governance') },
+        { id: 'cmd-settings', type: 'command' as const, title: 'Army Configuration', description: 'Configure risk settings and preferences', icon: Shield, color: 'text-blue-600', action: () => onNavigate?.('settings') },
         
         // Assets
-        { type: 'asset', title: 'ETH Balance', description: `${balances.eth} ETH`, icon: TrendingUp, color: 'text-blue-600', action: () => onNavigate?.('assets'), metadata: 'Ethereum' },
-        { type: 'asset', title: 'USDC Balance', description: `${balances.usdc} USDC`, icon: TrendingUp, color: 'text-green-600', action: () => onNavigate?.('assets'), metadata: 'USD Coin' },
-        { type: 'asset', title: 'ARMY Tokens', description: `${balances.army} ARMY`, icon: Bot, color: 'text-purple-600', action: () => onNavigate?.('assets'), metadata: 'MetaArmy Token' },
+        { id: 'asset-eth', type: 'asset' as const, title: 'ETH Balance', description: `${balances.eth} ETH`, icon: TrendingUp, color: 'text-blue-600', action: () => onNavigate?.('assets'), metadata: 'Ethereum' },
+        { id: 'asset-usdc', type: 'asset' as const, title: 'USDC Balance', description: `${balances.usdc} USDC`, icon: TrendingUp, color: 'text-green-600', action: () => onNavigate?.('assets'), metadata: 'USD Coin' },
+        { id: 'asset-army', type: 'asset' as const, title: 'ARMY Tokens', description: `${balances.army} ARMY`, icon: Bot, color: 'text-purple-600', action: () => onNavigate?.('assets'), metadata: 'MetaArmy Token' },
         
         // Recent transactions (limit to prevent excessive re-renders)
         ...history.slice(0, 3).map((tx, i) => ({
+            id: `tx-${tx.id || i}`,
             type: 'transaction' as const,
             title: tx.label,
             description: `${tx.status} • ${tx.age}`,
@@ -70,13 +71,13 @@ export function SearchSystem({ onNavigate }: SearchSystemProps) {
         })),
 
         // Agents/Swarms
-        { type: 'agent', title: 'DeFi Yield Optimizer', description: 'Automated yield farming and optimization', icon: Zap, color: 'text-yellow-600', action: () => onNavigate?.('chat') },
-        { type: 'agent', title: 'NFT Sniper Bot', description: 'Automated NFT trading and sniping', icon: Bot, color: 'text-pink-600', action: () => onNavigate?.('chat') },
-        { type: 'agent', title: 'Governance Auto-Voter', description: 'Automated DAO voting based on preferences', icon: Gavel, color: 'text-indigo-600', action: () => onNavigate?.('chat') },
+        { id: 'agent-defi', type: 'agent' as const, title: 'DeFi Yield Optimizer', description: 'Automated yield farming and optimization', icon: Zap, color: 'text-yellow-600', action: () => onNavigate?.('chat') },
+        { id: 'agent-nft', type: 'agent' as const, title: 'NFT Sniper Bot', description: 'Automated NFT trading and sniping', icon: Bot, color: 'text-pink-600', action: () => onNavigate?.('chat') },
+        { id: 'agent-gov', type: 'agent' as const, title: 'Governance Auto-Voter', description: 'Automated DAO voting based on preferences', icon: Gavel, color: 'text-indigo-600', action: () => onNavigate?.('chat') },
         
         // Proposals (sample)
-        { type: 'proposal', title: 'Upgrade MetaArmy Protocol to v4.0', description: 'Enhanced ZK-Proof Integration • 89% FOR', icon: Gavel, color: 'text-purple-600', action: () => onNavigate?.('governance') },
-        { type: 'proposal', title: 'Increase Gas Limit for Swarms', description: 'Proposal to increase default gas limits • Active', icon: Zap, color: 'text-orange-600', action: () => onNavigate?.('governance') },
+        { id: 'prop-upgrade', type: 'proposal' as const, title: 'Upgrade MetaArmy Protocol to v4.0', description: 'Enhanced ZK-Proof Integration • 89% FOR', icon: Gavel, color: 'text-purple-600', action: () => onNavigate?.('governance') },
+        { id: 'prop-gas', type: 'proposal' as const, title: 'Increase Gas Limit for Swarms', description: 'Proposal to increase default gas limits • Active', icon: Zap, color: 'text-orange-600', action: () => onNavigate?.('governance') },
     ], [balances.eth, balances.usdc, balances.army, history.slice(0, 3).length]) // Simplified dependencies
 
     useEffect(() => {
