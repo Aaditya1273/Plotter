@@ -84,13 +84,18 @@ export function SwarmMarketplace() {
     const [loading, setLoading] = useState(true)
     const [lastRefresh, setLastRefresh] = useState<number>(0)
     const { writeContractAsync, isPending } = useWriteContract()
+    
+    // Initialize contract reads only when we have swarms to read
     const { data: contractReads } = useReadContracts({
-        contracts: deployedSwarms.map(swarm => ({
+        contracts: deployedSwarms.length > 0 ? deployedSwarms.map(swarm => ({
             address: META_ARMY_ADDRESS,
             abi: META_ARMY_ABI,
             functionName: 'swarmBundles',
             args: [swarm.bundleId as `0x${string}`]
-        }))
+        })) : [],
+        query: {
+            enabled: deployedSwarms.length > 0
+        }
     })
 
     const checkBundleStatus = async (bundleId: string): Promise<boolean> => {
@@ -111,37 +116,24 @@ export function SwarmMarketplace() {
 
         setLoading(true)
         try {
-            // Fetch user's transaction history to find swarm deployments
-            const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
-            
-            if (!apiKey) {
-                console.error('❌ Etherscan API key not configured')
-                toast.error('API configuration error. Please contact support.')
-                setLoading(false)
-                return
-            }
-            
             console.log('🔍 Fetching swarms for address:', address)
             console.log('📋 MetaArmy contract address:', META_ARMY_ADDRESS)
             
-            const response = await fetch(
-                `https://api.etherscan.io/v2/api?chainid=11155111&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`,
-                {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                    },
-                    signal: AbortSignal.timeout(10000) // 10 second timeout
-                }
-            )
+            // Use local API route instead of direct Etherscan call
+            const response = await fetch(`/api/etherscan?address=${address}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+            })
             
             if (!response.ok) {
-                throw new Error(`Etherscan API error: ${response.status}`)
+                throw new Error(`API error: ${response.status}`)
             }
             
             const data = await response.json()
 
-            console.log('📡 Etherscan API response:', data)
+            console.log('📡 API response:', data)
 
             if (data.status === '1' && data.result) {
                 // Filter transactions to MetaArmy contract
@@ -154,13 +146,11 @@ export function SwarmMarketplace() {
                     return isToContract && isSuccessful
                 })
                 
-                console.log('✅ Found MetaArmy transactions:', metaArmyTxs)
-                    
-                    console.log('✅ Found MetaArmy transactions:', metaArmyTxs.length)
-                    console.log('📝 Transaction details:', metaArmyTxs)
+                console.log('✅ Found MetaArmy transactions:', metaArmyTxs.length)
+                console.log('📝 Transaction details:', metaArmyTxs)
 
-                    // Convert transactions to swarm objects
-                    const swarms: DeployedSwarm[] = metaArmyTxs.map((tx: any, index: number) => {
+                // Convert transactions to swarm objects
+                const swarms: DeployedSwarm[] = metaArmyTxs.map((tx: any, index: number) => {
                         // Determine swarm type based on transaction data or goal
                         let type: DeployedSwarm['type'] = 'defi'
                         let goal = 'Swarm Bundle Deployed'
@@ -271,8 +261,18 @@ export function SwarmMarketplace() {
                     console.log('❌ No transactions found or API error:', data)
                     setDeployedSwarms([])
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('❌ Failed to fetch deployed swarms:', error)
+                
+                // Show specific error messages
+                if (error.message?.includes('Network error')) {
+                    toast.error('Network connection issue. Check your internet connection.')
+                } else if (error.message?.includes('timeout')) {
+                    toast.error('Request timed out. Etherscan API is slow.')
+                } else {
+                    toast.error('Failed to load swarms. Please try again.')
+                }
+                
                 setDeployedSwarms([])
             } finally {
                 setLoading(false)

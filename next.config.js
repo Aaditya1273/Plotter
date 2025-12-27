@@ -1,17 +1,28 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Performance optimizations
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'framer-motion'],
+    webpackBuildWorker: true,
+  },
+  
   // Exclude backend folders from compilation
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
   
-  // Configure Turbopack (Next.js 16+ default)
-  turbopack: {
-    resolveAlias: {
-      '@react-native-async-storage/async-storage': './app/lib/async-storage-mock.js',
-    },
-  },
+  // Configure Turbopack (Next.js 16+ default) - removed invalid config
+  // turbopack config moved to experimental section in Next.js 16+
   
   // Keep webpack config for fallback compatibility
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
+    // Development optimizations
+    if (dev) {
+      config.watchOptions = {
+        poll: 1000,
+        aggregateTimeout: 300,
+        ignored: ['**/node_modules', '**/envio', '**/scripts', '**/cache', '**/artifacts'],
+      }
+    }
+
     // Exclude backend folders from webpack compilation
     config.module.rules.push({
       test: /\.(ts|tsx|js|jsx)$/,
@@ -28,7 +39,7 @@ const nextConfig = {
     // Handle MetaMask SDK React Native dependencies
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@react-native-async-storage/async-storage': require.resolve('./app/lib/async-storage-mock.js'),
+      // Let MetaMask SDK handle its own async storage
     };
     
     // Minimal fallbacks for Node.js modules
@@ -52,6 +63,20 @@ const nextConfig = {
       /Module not found: Can't resolve 'encoding'/,
       /Critical dependency: the request of a dependency is an expression/,
     ];
+    
+    // Optimize chunks for faster loading
+    if (!dev) {
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+          },
+        },
+      }
+    }
     
     return config;
   },
