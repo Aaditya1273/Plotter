@@ -127,15 +127,26 @@ export function SwarmMarketplace() {
                 },
             })
             
+            console.log('📡 API Response Status:', response.status, response.statusText)
+            
             if (!response.ok) {
-                throw new Error(`API error: ${response.status}`)
+                const errorText = await response.text()
+                console.error('❌ API Error Response:', errorText)
+                throw new Error(`API error: ${response.status} - ${errorText}`)
             }
             
             const data = await response.json()
 
-            console.log('📡 API response:', data)
+            console.log('📡 Full API response:', data)
+
+            if (data.error) {
+                console.error('❌ API returned error:', data.error)
+                throw new Error(data.error)
+            }
 
             if (data.status === '1' && data.result) {
+                console.log('📊 Total transactions found:', data.result.length)
+                
                 // Filter transactions to MetaArmy contract
                 const metaArmyTxs = data.result.filter((tx: any) => {
                     const isToContract = tx.to?.toLowerCase() === META_ARMY_ADDRESS.toLowerCase()
@@ -147,6 +158,14 @@ export function SwarmMarketplace() {
                 })
                 
                 console.log('✅ Found MetaArmy transactions:', metaArmyTxs.length)
+                
+                if (metaArmyTxs.length === 0) {
+                    console.log('⚠️ No transactions found to MetaArmy contract. Have you deployed any swarms via Chat?')
+                    console.log('💡 Expected contract address:', META_ARMY_ADDRESS)
+                    console.log('💡 Your address:', address)
+                    console.log('💡 To deploy a swarm: Go to Chat → Type "invest 10 USDC in DeFi" → Approve')
+                }
+                
                 console.log('📝 Transaction details:', metaArmyTxs)
 
                 // Convert transactions to swarm objects
