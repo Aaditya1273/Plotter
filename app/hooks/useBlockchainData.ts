@@ -3,9 +3,10 @@
 import { useAccount, useBalance, useReadContracts } from 'wagmi'
 import { formatUnits } from 'viem'
 import { useState, useEffect, useMemo } from 'react'
+import { CONTRACTS } from '@/lib/constants'
 
-const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS || '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8') as `0x${string}`
-const ARMY_TOKEN_ADDRESS = (process.env.NEXT_PUBLIC_ARMY_TOKEN_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
+const USDC_ADDRESS = CONTRACTS.USDC as `0x${string}`
+const ARMY_TOKEN_ADDRESS = CONTRACTS.ARMY_TOKEN as `0x${string}`
 
 const ERC20_ABI = [
     {
@@ -65,11 +66,11 @@ export function useBlockchainData() {
             try {
                 // Temporarily disable CoinGecko due to CORS issues
                 // Use fallback prices for now
-                setPrices(prev => ({ 
-                    ...prev, 
+                setPrices(prev => ({
+                    ...prev,
                     ETH: 3000 // Fallback ETH price
                 }))
-                
+
                 // TODO: Implement server-side price fetching API route
                 console.log('Using fallback prices due to CORS restrictions')
             } catch (error) {
@@ -125,33 +126,33 @@ export function useTransactionHistory() {
         const fetchMetaArmyHistory = async () => {
             setLoading(true)
             try {
-                
+
                 // Fetch MetaArmy contract transactions from our API route
-                const metaArmyAddress = process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0'
-                
+                const metaArmyAddress = CONTRACTS.META_PLOT_AGENT
+
                 // Fetch user's transactions directly from Etherscan
                 const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
                 if (!apiKey) {
                     return []
                 }
-                
+
                 const response = await fetch(
                     `https://api.etherscan.io/v2/api?chainid=11155111&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
                 )
-                
+
                 if (!response.ok) {
                     throw new Error(`API error: ${response.status}`)
                 }
-                
+
                 const txData = await response.json()
 
                 // Check for any API errors
                 if (txData.status === '0') {
                     if (txData.message === 'NOTOK') {
-                        
+
                         // If it's a V1 deprecation error, try alternative approach
                         if (txData.result?.includes('deprecated') || txData.result?.includes('V1 endpoint')) {
-                            
+
                             // Try using the /api/etherscan route instead
                             try {
                                 const altResponse = await fetch(`/api/etherscan?address=${address}`)
@@ -187,7 +188,7 @@ export function useTransactionHistory() {
                     const metaArmyTxs = txData.result.filter((tx: any) => {
                         const isToContract = tx.to?.toLowerCase() === metaArmyAddress.toLowerCase()
                         const isSuccessful = tx.isError === '0'
-                        
+
                         return isToContract && isSuccessful
                     }).slice(0, 10)
 
@@ -196,11 +197,11 @@ export function useTransactionHistory() {
                     const processedHistory = metaArmyTxs.map((tx: any) => {
                         let type = 'SWARM_DEPLOYMENT'
                         let label = 'Swarm Bundle Deployed'
-                        
+
                         // Try to determine the type based on input data
                         if (tx.input && tx.input.length > 10) {
                             const inputData = tx.input.toLowerCase()
-                            
+
                             // Look for function signatures or patterns
                             if (inputData.includes('createswarm') || inputData.includes('bundle')) {
                                 type = 'SWARM_DEPLOYMENT'
@@ -234,7 +235,7 @@ export function useTransactionHistory() {
                             age: new Date(parseInt(tx.timeStamp) * 1000).toLocaleString(),
                             gas: gasCost,
                             hash: `${tx.hash.substring(0, 6)}...${tx.hash.substring(tx.hash.length - 4)}`,
-                            zk: true, // MetaArmy transactions use ZK proofs
+                            isDelegated: true, // MetaArmy transactions use delegated execution
                             amount: tx.value !== '0' ? `${formatUnits(BigInt(tx.value), 18)} ETH` : '',
                             protocol: 'MetaArmy',
                             fullHash: tx.hash // Store full hash for Etherscan links

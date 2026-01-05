@@ -24,8 +24,6 @@ import { useBlockchainData, useTransactionHistory } from '../hooks/useBlockchain
 import { useWriteContract } from 'wagmi'
 import { toast } from 'react-hot-toast'
 
-const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
-
 const META_ARMY_ABI = [
   {
     name: 'createSwarmBundle',
@@ -38,9 +36,9 @@ const META_ARMY_ABI = [
         type: 'tuple[]',
         components: [
           { name: 'target', type: 'address' },
+          { name: 'token', type: 'address' },
           { name: 'amount', type: 'uint256' },
-          { name: 'data', type: 'bytes' },
-          { name: 'requiresZk', type: 'bool' }
+          { name: 'data', type: 'bytes' }
         ]
       }
     ],
@@ -167,7 +165,7 @@ export function Dashboard({ account }: DashboardProps) {
                         <h4 className="text-xl font-black text-gray-900 mb-1">{p.target}</h4>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{p.amount} • {p.frequency}</p>
                       </div>
-                      {p.zkVerified && <div className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-100">ZK Secure</div>}
+                      {p.isDelegated && <div className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-100">Delegated</div>}
                     </div>
                     <div className="flex gap-4">
                       <button onClick={() => handleTogglePermission(p.id)} className="flex-1 py-4 bg-white border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all">
@@ -191,10 +189,10 @@ export function Dashboard({ account }: DashboardProps) {
             <div className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-sm">
               <div className="flex items-center justify-between mb-10">
                 <h3 className="text-xl font-black flex items-center gap-3">
-                  <Layers className="w-6 h-6 text-gray-400" /> 
+                  <Layers className="w-6 h-6 text-gray-400" />
                   Swarm Feed
                 </h3>
-                <button 
+                <button
                   onClick={() => window.location.reload()}
                   className="px-3 py-1 bg-gray-50 hover:bg-gray-100 rounded-lg text-[9px] font-black uppercase tracking-widest text-gray-600 transition-all"
                 >
@@ -203,20 +201,19 @@ export function Dashboard({ account }: DashboardProps) {
               </div>
               <div className="space-y-4">
                 {history.length > 0 ? history.slice(0, 4).map((tx, i) => (
-                  <div 
-                    key={i} 
+                  <div
+                    key={i}
                     onClick={() => window.open(`https://sepolia.etherscan.io/tx/${tx.fullHash || tx.id}`, '_blank')}
                     className="flex items-center gap-5 p-5 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100 cursor-pointer group"
                   >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform ${
-                      tx.type === 'SWARM_DEPLOYMENT' ? 'bg-purple-50 text-purple-600' :
-                      tx.type === 'PERMISSION_GRANTED' ? 'bg-green-50 text-green-600' :
-                      tx.type === 'SWARM_EXECUTION' ? 'bg-blue-50 text-blue-600' :
-                      'bg-gray-50 text-gray-600'
-                    }`}>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform ${tx.type === 'SWARM_DEPLOYMENT' ? 'bg-purple-50 text-purple-600' :
+                        tx.type === 'PERMISSION_GRANTED' ? 'bg-green-50 text-green-600' :
+                          tx.type === 'SWARM_EXECUTION' ? 'bg-blue-50 text-blue-600' :
+                            'bg-gray-50 text-gray-600'
+                      }`}>
                       {tx.type === 'SWARM_DEPLOYMENT' ? <Cpu className="w-6 h-6" /> :
-                       tx.type === 'PERMISSION_GRANTED' ? <CheckCircle className="w-6 h-6" /> :
-                       <Activity className="w-6 h-6" />}
+                        tx.type === 'PERMISSION_GRANTED' ? <CheckCircle className="w-6 h-6" /> :
+                          <Activity className="w-6 h-6" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1">
@@ -228,7 +225,7 @@ export function Dashboard({ account }: DashboardProps) {
                         <span className="text-[9px] text-gray-400">• {tx.gas}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {tx.zk && <span className="text-[8px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-black uppercase">ZK Verified</span>}
+                        {tx.isDelegated && <span className="text-[8px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-black uppercase">Delegated Execution</span>}
                         <span className="text-[8px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full font-black uppercase">{tx.status}</span>
                         {tx.amount && <span className="text-[8px] text-gray-500">{tx.amount}</span>}
                       </div>

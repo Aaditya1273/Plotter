@@ -1,202 +1,203 @@
-// Gemini AI integration for MetaArmy intent parsing
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+// Initialize Gemini AI
+const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-export interface SwarmTaskResponse {
-  action: 'invest' | 'swap' | 'yield' | 'rebalance' | 'dca' | 'vote' | 'snipe'
-  asset: string
-  amount?: string
-  target: string
-  conditions: string[]
-  requiresZk: boolean
+export interface GeminiResponse {
+  intent: 'invest' | 'transfer' | 'swap' | 'yield' | 'chat' | 'portfolio' | 'help';
+  confidence: number;
+  amount?: string;
+  token?: string;
+  target?: string;
+  reasoning: string;
+  response: string;
 }
 
-export interface GeminiSwarmResponse {
-  overallGoal: string
-  isBundle: boolean
-  tasks: SwarmTaskResponse[]
-  priority: 'speed' | 'efficiency' | 'cost'
-  confidence: number
-}
+export async function analyzeUserIntent(message: string): Promise<GeminiResponse> {
+  // Check if API key is available
+  if (!genAI || !apiKey) {
+    console.warn("[Gemini] API key not configured, using fallback analysis");
+    return fallbackAnalysis(message);
+  }
 
-export async function parseIntentWithGemini(userInput: string): Promise<GeminiSwarmResponse> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
-You are the Swarm Intelligence for MetaArmy, a DeFi automation platform. Parse the following user intent into precise blockchain actions.
+You are MetaArmy AI, a DeFi automation assistant. Analyze this user message and determine their intent.
 
-CRITICAL: Extract the EXACT amount mentioned by the user. Do not default to generic amounts.
+User message: "${message}"
 
-User Input: "${userInput}"
-
-Extract and return a JSON object with these fields:
-- overallGoal: brief summary of the user's intent
-- isBundle: boolean (true if more than 1 action is required)
-- tasks: array of objects, each containing:
-    - action: one of ["invest", "swap", "yield", "rebalance", "dca", "vote", "snipe"]
-    - asset: cryptocurrency symbol (ETH, USDC, ARMY, etc.)
-    - amount: EXACT amount from user input (e.g., "12", "0.5", "100.25") - DO NOT use default amounts
-    - target: DeFi protocol (Aave, Compound, Uniswap, Lido, etc.) or "MetaArmy DAO"
-    - conditions: array of smart triggers (e.g., ["gas < 30 gwei", "APY > 5%"])
-    - requiresZk: boolean (true if "secure", "verified", or "zk" is mentioned)
-- priority: one of ["speed", "efficiency", "cost"]
-- confidence: 0-1 score
-
-AMOUNT EXTRACTION RULES:
-- "invest 12 USDC" → amount: "12"
-- "Help me invest 12 USDC in DeFi" → amount: "12"
-- "$50 into Aave" → amount: "50"
-- "0.1 ETH to Uniswap" → amount: "0.1"
-- If no amount specified, use "100" as default
-
-PROTOCOL MAPPING:
-- "DeFi", "yield", "lending" → Aave
-- "swap", "trade", "exchange" → Uniswap  
-- "stake", "staking" → Lido
-- "compound" → Compound
-
-Examples:
-Input: "Help me invest 12 USDC in DeFi"
-Output: {
-  "overallGoal": "Invest 12 USDC in DeFi yield farming",
-  "isBundle": false,
-  "tasks": [
-    { "action": "invest", "asset": "USDC", "amount": "12", "target": "Aave", "conditions": ["APY > 3%", "gas < 30 gwei"], "requiresZk": false }
-  ],
-  "priority": "efficiency",
-  "confidence": 0.95
+Respond with a JSON object containing:
+{
+  "intent": "invest|transfer|swap|yield|chat|portfolio|help",
+  "confidence": 0.0-1.0,
+  "amount": "extracted amount if any",
+  "token": "ETH|USDC|DAI if mentioned",
+  "target": "wallet address if mentioned",
+  "reasoning": "brief explanation of your analysis",
+  "response": "friendly response to the user"
 }
 
-Input: "swap 0.5 ETH for USDC and stake in Aave securely"
-Output: {
-  "overallGoal": "Swap ETH and stake in Aave with security",
-  "isBundle": true,
-  "tasks": [
-    { "action": "swap", "asset": "ETH", "amount": "0.5", "target": "Uniswap", "conditions": ["gas < 25 gwei"], "requiresZk": true },
-    { "action": "invest", "asset": "USDC", "amount": "0.5", "target": "Aave", "conditions": ["APY > 3%"], "requiresZk": true }
-  ],
-  "priority": "efficiency",
-  "confidence": 0.98
-}
+Rules:
+- "invest", "put", "deposit", "stake" → intent: "invest"
+- "send", "transfer", "move" → intent: "transfer"  
+- "swap", "exchange", "trade" → intent: "swap"
+- "yield", "earn", "farm" → intent: "yield"
+- "portfolio", "balance", "holdings" → intent: "portfolio"
+- "help", "what can you do" → intent: "help"
+- Casual greetings like "hi", "hello" → intent: "chat"
+- Extract amounts like "0.01 ETH", "5 USDC", "10 dollars"
+- Extract wallet addresses (0x...)
+- Be confident (0.8+) for clear financial commands
+- Be less confident (0.3-0.7) for ambiguous messages
+- Use "chat" for casual conversation
 
-Return ONLY valid JSON without any markdown formatting.
-`
+Example responses:
+- "invest 0.01 ETH" → {"intent": "invest", "confidence": 0.9, "amount": "0.01", "token": "ETH", ...}
+- "hi" → {"intent": "chat", "confidence": 0.9, "response": "Hello! I'm your MetaArmy AI assistant..."}
+- "what's my balance" → {"intent": "portfolio", "confidence": 0.8, ...}
+`;
 
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const text = response.text()
-
-    // Parse JSON response
-    const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim()
-    const parsed = JSON.parse(cleanedText)
-
-    // Validate and set defaults
-    return {
-      overallGoal: parsed.overallGoal || userInput,
-      isBundle: parsed.isBundle || parsed.tasks?.length > 1,
-      tasks: parsed.tasks?.length > 0 ? parsed.tasks : [
-        {
-          action: parsed.action || 'invest',
-          asset: parsed.asset || 'USDC',
-          amount: parsed.amount || '400',
-          target: parsed.target || 'Aave',
-          conditions: parsed.conditions || ['gas < 30 gwei'],
-          requiresZk: parsed.requiresZk || false
-        }
-      ],
-      priority: parsed.priority || 'efficiency',
-      confidence: parsed.confidence || 0.8
-    }
-
-  } catch (error) {
-    console.error('Gemini AI parsing error:', error)
-
-    // Fallback to rule-based parsing
-    return fallbackParsing(userInput)
-  }
-}
-
-// Fallback rule-based parsing if Gemini fails - Enhanced for better amount detection
-function fallbackParsing(input: string): GeminiSwarmResponse {
-  const normalizedInput = input.toLowerCase()
-  const tasks: SwarmTaskResponse[] = []
-
-  // Enhanced amount extraction
-  const extractAmount = (text: string): string => {
-    const patterns = [
-      /(\d+(?:\.\d+)?)\s*(?:usdc|eth|dai|dollars?|usd)/i,  // "12 USDC", "12.5 ETH"
-      /\$(\d+(?:\.\d+)?)/,                                   // "$12", "$12.5"
-      /invest\s+(\d+(?:\.\d+)?)/i,                          // "invest 12"
-      /(\d+(?:\.\d+)?)\s*(?:in|into|on)/i,                 // "12 in DeFi"
-      /(\d+(?:\.\d+)?)/                                     // Any number as fallback
-    ]
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
     
-    for (const pattern of patterns) {
-      const match = text.match(pattern)
-      if (match) {
-        return match[1]
-      }
+    // Try to parse JSON response
+    try {
+      const parsed = JSON.parse(text);
+      return {
+        intent: parsed.intent || 'chat',
+        confidence: parsed.confidence || 0.5,
+        amount: parsed.amount,
+        token: parsed.token,
+        target: parsed.target,
+        reasoning: parsed.reasoning || 'AI analysis',
+        response: parsed.response || 'I understand you want to interact with DeFi protocols.'
+      };
+    } catch (parseError) {
+      console.error("[Gemini] Failed to parse JSON:", parseError);
+      // Fallback to simple pattern matching
+      return fallbackAnalysis(message);
     }
-    return '100' // Default fallback
+  } catch (error) {
+    console.error("[Gemini] API error:", error);
+    // Fallback to simple pattern matching
+    return fallbackAnalysis(message);
+  }
+}
+
+// Fallback analysis when Gemini API fails
+function fallbackAnalysis(message: string): GeminiResponse {
+  const cleanMessage = message.trim().toLowerCase();
+  
+  // Casual conversation patterns
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|how are you|what's up|sup)$/i.test(cleanMessage)) {
+    return {
+      intent: 'chat',
+      confidence: 0.9,
+      reasoning: 'Detected casual greeting',
+      response: "Hello! I'm your MetaArmy AI assistant. I can help you with DeFi operations like investing, transferring tokens, and yield farming. Try saying 'invest 0.01 ETH' or 'help' to see what I can do!"
+    };
   }
 
-  // Enhanced protocol detection
-  const detectProtocol = (text: string): string => {
-    if (text.includes('aave')) return 'Aave'
-    if (text.includes('compound')) return 'Compound'
-    if (text.includes('uniswap') || text.includes('swap')) return 'Uniswap'
-    if (text.includes('lido') || text.includes('staking')) return 'Lido'
-    if (text.includes('defi') || text.includes('yield') || text.includes('invest')) return 'Aave'
-    return 'Aave' // Default for investment
+  // Help patterns
+  if (/help|what can you do|commands|guide/i.test(cleanMessage)) {
+    return {
+      intent: 'help',
+      confidence: 0.9,
+      reasoning: 'User requesting help',
+      response: `I can help you with:
+• Investment: "invest 0.01 ETH" or "put 5 USDC into yield farming"
+• Transfers: "send 0.005 ETH" or "transfer 10 USDC"
+• Portfolio: "show my balance" or "portfolio overview"
+• Swaps: "swap ETH for USDC" (coming soon)
+• Yield: "find best yield for USDC" (coming soon)
+
+Just speak naturally and I'll understand your intent!`
+    };
   }
 
-  // Basic split for fallback
-  const parts = input.split(/ and |, /)
-  parts.forEach(part => {
-    const subPart = part.toLowerCase()
-    tasks.push({
-      action: subPart.includes('swap') ? 'swap' : subPart.includes('snipe') ? 'snipe' : 'invest',
-      asset: subPart.match(/(usdc|eth|army|dai|weth)/i)?.[0].toUpperCase() || 'USDC',
-      amount: extractAmount(part),
-      target: detectProtocol(subPart),
-      conditions: ['Automated by MetaArmy'],
-      requiresZk: subPart.includes('zk') || subPart.includes('secure')
-    })
-  })
+  // Investment patterns
+  if (/invest|put|deposit|stake/i.test(cleanMessage)) {
+    const amountMatch = cleanMessage.match(/(\d+(?:\.\d+)?)\s*(eth|usdc|dai|dollars?)/i);
+    return {
+      intent: 'invest',
+      confidence: amountMatch ? 0.8 : 0.6,
+      amount: amountMatch ? amountMatch[1] : undefined,
+      token: amountMatch ? (amountMatch[2].toLowerCase() === 'eth' ? 'ETH' : 'USDC') : undefined,
+      reasoning: 'Detected investment intent',
+      response: amountMatch 
+        ? `I'll help you invest ${amountMatch[1]} ${amountMatch[2].toUpperCase()}. Let me process this for you.`
+        : "I understand you want to invest. Please specify an amount and token, like 'invest 0.01 ETH'."
+    };
+  }
 
+  // Transfer patterns
+  if (/send|transfer|move/i.test(cleanMessage)) {
+    const amountMatch = cleanMessage.match(/(\d+(?:\.\d+)?)\s*(eth|usdc|dai|dollars?)/i);
+    return {
+      intent: 'transfer',
+      confidence: amountMatch ? 0.8 : 0.6,
+      amount: amountMatch ? amountMatch[1] : undefined,
+      token: amountMatch ? (amountMatch[2].toLowerCase() === 'eth' ? 'ETH' : 'USDC') : undefined,
+      reasoning: 'Detected transfer intent',
+      response: amountMatch 
+        ? `I'll help you transfer ${amountMatch[1]} ${amountMatch[2].toUpperCase()}. Processing now.`
+        : "I understand you want to transfer tokens. Please specify an amount and token, like 'send 0.01 ETH'."
+    };
+  }
+
+  // Portfolio patterns
+  if (/portfolio|balance|holdings|show.*money|my.*funds/i.test(cleanMessage)) {
+    return {
+      intent: 'portfolio',
+      confidence: 0.8,
+      reasoning: 'User asking about portfolio',
+      response: "I'd love to show you your portfolio! The portfolio tracking feature is coming soon. For now, you can check your wallet balance directly in MetaMask."
+    };
+  }
+
+  // Default to chat
   return {
-    overallGoal: input,
-    isBundle: tasks.length > 1,
-    tasks,
-    priority: 'efficiency',
-    confidence: 0.7
+    intent: 'chat',
+    confidence: 0.3,
+    reasoning: 'Unclear intent, defaulting to chat',
+    response: "I'm not sure what you'd like to do. Try saying something like 'invest 0.01 ETH', 'transfer 5 USDC', or 'help' to see what I can do!"
+  };
+}
+
+export async function generateChatResponse(message: string, context?: string): Promise<string> {
+  // Check if API key is available
+  if (!genAI || !apiKey) {
+    console.warn("[Gemini] API key not configured, using fallback response");
+    return "Hello! I'm your MetaArmy AI assistant. I can help you with DeFi operations like investing, transferring tokens, and yield farming. How can I assist you today?";
   }
-}
 
-// Generate human-readable summary of parsed intent
-export function generateIntentSummary(intent: GeminiSwarmResponse): string {
-  if (intent.tasks.length === 1) {
-    const t = intent.tasks[0]
-    return `AI identified: ${t.action} ${t.amount} ${t.asset} on ${t.target}${t.requiresZk ? ' (ZK-Secured)' : ''}.`
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+You are MetaArmy AI, a friendly DeFi automation assistant. The user said: "${message}"
+
+${context ? `Context: ${context}` : ''}
+
+Respond as a helpful AI assistant that specializes in DeFi operations. Keep responses:
+- Friendly and conversational
+- Focused on DeFi and crypto
+- Helpful and informative
+- Brief but complete
+- Professional but not robotic
+
+If they're just chatting, be friendly. If they need help with DeFi, guide them.
+`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("[Gemini] Chat error:", error);
+    return "Hello! I'm your MetaArmy AI assistant. I can help you with DeFi operations like investing, transferring tokens, and yield farming. How can I assist you today?";
   }
-  return `AI initialized Swarm for: ${intent.tasks.map(t => t.action).join(' then ')} across ${Array.from(new Set(intent.tasks.map(t => t.target))).join(', ')}.`
-}
-
-// Validate Gemini API key
-export function isGeminiConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your_gemini_api_key_here'
-}
-
-// Get Gemini API setup instructions
-export function getGeminiSetupInstructions(): string {
-  return `
-To enable AI-powered intent parsing:
-1. Go to https://makersuite.google.com/app/apikey
-2. Create a new API key
-3. Add it to your .env.local file:
-   GEMINI_API_KEY=your_actual_api_key_here
-4. Restart your development server
-`
 }

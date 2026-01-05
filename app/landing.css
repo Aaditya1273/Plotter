@@ -1,0 +1,62 @@
+/* MetaArmy Professional Landing Page Styles */
+
+/* Simple, professional animations only */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Subtle gradient text animation */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.gradient-text {
+  background: linear-gradient(-45deg, #3b82f6, #8b5cf6);
+  background-size: 200% 200%;
+  animation: gradient-shift 4s ease infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Professional hover effects */
+.professional-hover {
+  transition: all 0.3s ease;
+}
+
+.professional-hover:hover {
+  transform: translateY(-2px);
+}
+
+/* Clean button effects */
+.clean-button {
+  transition: all 0.3s ease;
+}
+
+.clean-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive design helpers */
+@media (max-width: 768px) {
+  .hero-text {
+    font-size: 3rem;
+  }
+}
+
+/* Remove all childish animations for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

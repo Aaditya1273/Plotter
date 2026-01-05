@@ -1,4 +1,5 @@
 import './globals.css'
+import './landing.css'
 import type { Metadata } from 'next'
 import { Providers } from './providers'
 import { Toaster } from 'react-hot-toast'

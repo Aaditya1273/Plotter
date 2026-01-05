@@ -1,13 +1,15 @@
 // Contract addresses and constants for Meta-Plot AI
 
 export const CONTRACTS = {
-  // Updated deployed contract address on Sepolia (with gas optimizations)
-  META_PLOT_AGENT: '0xcf4F105FeAc23F00489a7De060D34959f8796dd0',
-  
-  // Real Sepolia testnet addresses
+  // MetaArmySimple deployed contract address on Sepolia (ERC-7715 compatible)
+  META_ARMY: '0xBa8B2a116cbb0240Be18Ad7E4989CffC445Ee6d9',
+  META_ARMY_SIMPLE: '0xBa8B2a116cbb0240Be18Ad7E4989CffC445Ee6d9',
+  ARMY_TOKEN: '0x35d55c205Ff2b5c943c5BBA88C5E0CAeC1d3648F',
+
+  // Real Sepolia testnet addresses (ERC-7715 compatible)
   AAVE_POOL: '0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951', // Aave V3 Pool on Sepolia
   AAVE_DATA_PROVIDER: '0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654', // Aave V3 Data Provider
-  USDC: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8', // USDC on Sepolia
+  USDC: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8', // USDC on Sepolia (ERC-7715 compatible)
   DAI: '0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357', // DAI on Sepolia
   WETH: '0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c', // WETH on Sepolia
 } as const

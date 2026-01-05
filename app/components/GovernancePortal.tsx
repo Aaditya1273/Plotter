@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { CONTRACTS } from '@/lib/constants'
 import {
     Gavel,
     Users,
@@ -91,9 +92,9 @@ export function GovernancePortal() {
     const [votingPower, setVotingPower] = useState<string>('0')
     const { writeContractAsync } = useWriteContract()
 
-    // Contract addresses
-    const DAO_ADDRESS = (process.env.NEXT_PUBLIC_DAO_ADDRESS || '0x464D37393C8D3991b493DBb57F5f3b8c31c7Fa60') as `0x${string}`
-    const ARMY_TOKEN_ADDRESS = (process.env.NEXT_PUBLIC_ARMY_TOKEN_ADDRESS || '0x5d946da55953d7AA3d2BfB5Bd43B77bfD8e502DE') as `0x${string}`
+    // Contract addresses from constants
+    const DAO_ADDRESS = (process.env.NEXT_PUBLIC_DAO_ADDRESS || CONTRACTS.META_PLOT_AGENT) as `0x${string}`
+    const ARMY_TOKEN_ADDRESS = CONTRACTS.ARMY_TOKEN as `0x${string}`
 
     // Read contract data
     const { data: contractData } = useReadContracts({

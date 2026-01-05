@@ -1,83 +1,85 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount, useWalletClient } from 'wagmi'
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
+import { erc7715ProviderActions } from '@metamask/smart-accounts-kit/actions'
+import { parseEther, parseUnits } from 'viem'
+import { CONTRACTS } from '../lib/constants'
+import { useSessionAccount } from '../providers/SessionAccountProvider'
+import { usePermissions } from '../providers/PermissionProvider'
 
-// Mock Smart Accounts Kit integration
-// In production, this would use the actual @metamask/smart-accounts-kit
+/**
+ * Real Smart Accounts Kit integration for ERC-7715.
+ * Provides hooks for creating and managing Advanced Permissions.
+ */
 export function useSmartAccountsKit() {
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
+  const { sessionAccount, createSessionAccount } = useSessionAccount()
+  const { savePermission, permission, removePermission } = usePermissions()
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
-    if (isConnected && walletClient) {
-      // Initialize Smart Accounts Kit
+    if (isConnected && walletClient && sessionAccount) {
       setIsReady(true)
     }
-  }, [isConnected, walletClient])
+  }, [isConnected, walletClient, sessionAccount])
 
   const createPermission = async (params: {
-    target: string
     amount: string
-    expiry?: number
-    conditions?: string[]
+    expiryDays?: number
+    justification?: string
   }) => {
-    if (!isReady || !walletClient) {
-      throw new Error('Smart Accounts Kit not ready')
+    if (!walletClient || !sessionAccount) {
+      throw new Error('Wallet not connected or session account missing')
     }
 
-    // Mock permission creation
-    // In production, this would use the actual Smart Accounts Kit API
-    console.log('Creating permission with params:', params)
-    
-    // Simulate MetaMask permission request
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    return {
-      permissionId: `permission_${Date.now()}`,
-      status: 'granted',
-      ...params
+    const extendedClient = walletClient.extend(erc7715ProviderActions())
+
+    const currentTime = Math.floor(Date.now() / 1000)
+    const expiry = currentTime + (24 * 60 * 60 * (params.expiryDays || 30))
+
+    console.log('Requesting execution permissions for session account:', sessionAccount.address)
+
+    const grantedPermissions = await extendedClient.requestExecutionPermissions([{
+      chainId: walletClient.chain.id,
+      expiry,
+      signer: {
+        type: 'account',
+        data: {
+          address: sessionAccount.address,
+        },
+      },
+      permission: {
+        type: 'erc20-token-periodic',
+        data: {
+          tokenAddress: CONTRACTS.USDC,
+          periodAmount: parseUnits(params.amount, 6),
+          periodDuration: 86400, // 1 day
+          startTime: Math.floor(Date.now() / 1000),
+          justification: params.justification || 'Permission for automated USDC swarm execution',
+        },
+      },
+      isAdjustmentAllowed: true,
+    }])
+
+    if (grantedPermissions && grantedPermissions.length > 0) {
+      savePermission(grantedPermissions[0])
+      return grantedPermissions[0]
     }
+
+    throw new Error('No permissions granted')
   }
 
-  const revokePermission = async (permissionId: string) => {
-    if (!isReady) {
-      throw new Error('Smart Accounts Kit not ready')
-    }
-
-    // Mock permission revocation
-    console.log('Revoking permission:', permissionId)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    return { status: 'revoked' }
-  }
-
-  const executeWithPermission = async (params: {
-    permissionId: string
-    target: string
-    data: string
-    value?: string
-  }) => {
-    if (!isReady) {
-      throw new Error('Smart Accounts Kit not ready')
-    }
-
-    // Mock execution
-    console.log('Executing with permission:', params)
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    return {
-      txHash: `0x${Math.random().toString(16).substr(2, 8)}...${Math.random().toString(16).substr(2, 8)}`,
-      status: 'success'
-    }
+  const revoke = async () => {
+    removePermission()
   }
 
   return {
     isReady,
     createPermission,
-    revokePermission,
-    executeWithPermission,
+    revokePermission: revoke,
+    permission,
     address
   }
 }

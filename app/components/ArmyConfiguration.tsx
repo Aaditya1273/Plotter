@@ -23,7 +23,6 @@ interface ConfigSettings {
     gasLimit: string
     slippageTolerance: string
     autoExecute: boolean
-    zkProofRequired: boolean
     maxSwarmSize: string
     executionDelay: string
 }
@@ -34,7 +33,6 @@ export function ArmyConfiguration() {
         gasLimit: '15000000',
         slippageTolerance: '2.5',
         autoExecute: false,
-        zkProofRequired: true,
         maxSwarmSize: '10',
         executionDelay: '30'
     })
@@ -59,7 +57,6 @@ export function ArmyConfiguration() {
             gasLimit: '15000000',
             slippageTolerance: '2.5',
             autoExecute: false,
-            zkProofRequired: true,
             maxSwarmSize: '10',
             executionDelay: '30'
         })
@@ -125,11 +122,10 @@ export function ArmyConfiguration() {
                                     <button
                                         key={risk}
                                         onClick={() => handleSettingChange('riskAppetite', risk)}
-                                        className={`p-3 rounded-xl border-2 text-xs font-black uppercase tracking-widest transition-all ${
-                                            settings.riskAppetite === risk 
-                                                ? getRiskColor(risk) 
+                                        className={`p-3 rounded-xl border-2 text-xs font-black uppercase tracking-widest transition-all ${settings.riskAppetite === risk
+                                                ? getRiskColor(risk)
                                                 : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'
-                                        }`}
+                                            }`}
                                     >
                                         {risk}
                                     </button>
@@ -202,7 +198,7 @@ export function ArmyConfiguration() {
 
                         <div className="p-4 bg-gray-50 rounded-2xl">
                             <p className="text-xs text-gray-600 mb-2">
-                                <strong>Security Note:</strong> Network endpoints are configured securely on the backend. 
+                                <strong>Security Note:</strong> Network endpoints are configured securely on the backend.
                                 Frontend configuration has been disabled for production security.
                             </p>
                         </div>
@@ -251,13 +247,11 @@ export function ArmyConfiguration() {
                             </div>
                             <button
                                 onClick={() => handleSettingChange('autoExecute', !settings.autoExecute)}
-                                className={`w-12 h-6 rounded-full transition-all ${
-                                    settings.autoExecute ? 'bg-indigo-600' : 'bg-gray-300'
-                                }`}
+                                className={`w-12 h-6 rounded-full transition-all ${settings.autoExecute ? 'bg-indigo-600' : 'bg-gray-300'
+                                    }`}
                             >
-                                <div className={`w-5 h-5 bg-white rounded-full transition-all ${
-                                    settings.autoExecute ? 'translate-x-6' : 'translate-x-0.5'
-                                }`} />
+                                <div className={`w-5 h-5 bg-white rounded-full transition-all ${settings.autoExecute ? 'translate-x-6' : 'translate-x-0.5'
+                                    }`} />
                             </button>
                         </div>
                     </div>
@@ -278,19 +272,13 @@ export function ArmyConfiguration() {
                     <div className="space-y-6">
                         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
                             <div>
-                                <p className="text-sm font-bold text-gray-900">ZK-Proof Required</p>
-                                <p className="text-xs text-gray-500">Require zero-knowledge proofs for all executions</p>
+                                <p className="text-sm font-bold text-gray-900">Permission Integrity Check</p>
+                                <p className="text-xs text-gray-500">Automatically verify ERC-7715 signatures before execution</p>
                             </div>
-                            <button
-                                onClick={() => handleSettingChange('zkProofRequired', !settings.zkProofRequired)}
-                                className={`w-12 h-6 rounded-full transition-all ${
-                                    settings.zkProofRequired ? 'bg-green-600' : 'bg-gray-300'
-                                }`}
-                            >
-                                <div className={`w-5 h-5 bg-white rounded-full transition-all ${
-                                    settings.zkProofRequired ? 'translate-x-6' : 'translate-x-0.5'
-                                }`} />
-                            </button>
+                            <div className="flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full border border-green-100">
+                                <CheckCircle className="w-3 h-3" />
+                                <span className="text-[8px] font-black uppercase">Enforced</span>
+                            </div>
                         </div>
 
                         <div className="p-4 bg-green-50 rounded-2xl border border-green-200">

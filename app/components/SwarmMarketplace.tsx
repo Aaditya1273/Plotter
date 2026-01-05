@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { CONTRACTS } from '@/lib/constants'
 import {
     Activity,
     CheckCircle,
@@ -42,8 +43,7 @@ const META_ARMY_ABI = [
         type: 'function',
         stateMutability: 'nonpayable',
         inputs: [
-            { name: 'bundleId', type: 'bytes32' },
-            { name: 'zkProofHashes', type: 'bytes32[]' }
+            { name: 'bundleId', type: 'bytes32' }
         ],
         outputs: []
     },
@@ -58,8 +58,7 @@ const META_ARMY_ABI = [
         outputs: [
             { name: 'target', type: 'address' },
             { name: 'amount', type: 'uint256' },
-            { name: 'data', type: 'bytes' },
-            { name: 'requiresZk', type: 'bool' }
+            { name: 'data', type: 'bytes' }
         ]
     }
 ] as const
@@ -85,8 +84,8 @@ export function SwarmMarketplace() {
     const [lastRefresh, setLastRefresh] = useState<number>(0)
     const { writeContractAsync, isPending } = useWriteContract()
 
-    const META_ARMY_ADDRESS = (process.env.NEXT_PUBLIC_META_PLOT_AGENT_ADDRESS || '0xcf4F105FeAc23F00489a7De060D34959f8796dd0') as `0x${string}`
-    
+    const META_ARMY_ADDRESS = CONTRACTS.META_PLOT_AGENT as `0x${string}`
+
     // Initialize contract reads only when we have swarms to read
     const { data: contractReads } = useReadContracts({
         contracts: deployedSwarms.length > 0 ? deployedSwarms.map(swarm => ({
@@ -102,7 +101,7 @@ export function SwarmMarketplace() {
 
     const checkBundleStatus = async (bundleId: string): Promise<boolean> => {
         try {
-            
+
             // Convert transaction hash to proper bytes32 format for bundle ID
             let properBundleId: `0x${string}`
             if (bundleId.startsWith('0x') && bundleId.length === 66) {
@@ -110,7 +109,7 @@ export function SwarmMarketplace() {
             } else {
                 return false
             }
-            
+
             // Try to read the bundle from contract
             const response = await fetch('/api/contract-read', {
                 method: 'POST',
@@ -122,13 +121,13 @@ export function SwarmMarketplace() {
                     args: [properBundleId]
                 })
             })
-            
+
             if (!response.ok) {
                 return false
             }
-            
+
             const result = await response.json()
-            
+
             // Check if bundle exists and is active
             if (result && result[0] && result[0] !== '0x0000000000000000000000000000000000000000') {
                 return result[3] === true || result[3] === 'true' // Check active status
@@ -147,19 +146,19 @@ export function SwarmMarketplace() {
         try {
             // Fetch user's transaction history to find swarm deployments
             const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY
-            
+
             if (!apiKey) {
                 console.error('❌ Etherscan API key not configured')
                 toast.error('API configuration error. Please contact support.')
                 setLoading(false)
                 return
             }
-            
+
             console.log('🔍 Fetching swarms for address:', address)
             console.log('📋 MetaArmy contract address:', META_ARMY_ADDRESS)
-            
+
             const apiUrl = `https://api.etherscan.io/v2/api?chainid=11155111&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
-            
+
             const response = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
@@ -167,20 +166,20 @@ export function SwarmMarketplace() {
                     'User-Agent': 'MetaArmy/1.0'
                 },
             })
-            
+
             if (!response.ok) {
                 throw new Error(`Etherscan API HTTP error: ${response.status}`)
             }
-            
+
             const data = await response.json()
 
             // Check for any API errors
             if (data.status === '0') {
                 if (data.message === 'NOTOK') {
-                    
+
                     // If it's a V1 deprecation error, try alternative approach
                     if (data.result?.includes('deprecated') || data.result?.includes('V1 endpoint')) {
-                        
+
                         // Try using the /api/etherscan route instead
                         try {
                             const altResponse = await fetch(`/api/etherscan?address=${address}`)
@@ -221,7 +220,7 @@ export function SwarmMarketplace() {
                 const metaArmyTxs = data.result.filter((tx: any) => {
                     const isToContract = tx.to?.toLowerCase() === META_ARMY_ADDRESS.toLowerCase()
                     const isSuccessful = tx.isError === '0'
-                    
+
                     // Check if it's a createSwarmBundle transaction by looking at function signature
                     let isSwarmBundleCreation = false
                     if (tx.input && tx.input.length > 10) {
@@ -230,124 +229,124 @@ export function SwarmMarketplace() {
                         // For now, check if it's a contract interaction with significant input data
                         isSwarmBundleCreation = tx.input.length > 200 // Swarm bundles have substantial data
                     }
-                    
+
                     return isToContract && isSuccessful && isSwarmBundleCreation
                 })
-                
+
                 console.log('✅ Found MetaArmy transactions:', metaArmyTxs.length)
 
                 // Convert transactions to swarm objects
                 const swarms: DeployedSwarm[] = metaArmyTxs.map((tx: any, index: number) => {
 
-                        // Determine swarm type based on transaction data or goal
-                        let type: DeployedSwarm['type'] = 'defi'
-                        let goal = 'Swarm Bundle Deployed'
-                        let impact = 'Active'
-                        let protocol = 'MetaArmy'
+                    // Determine swarm type based on transaction data or goal
+                    let type: DeployedSwarm['type'] = 'defi'
+                    let goal = 'Swarm Bundle Deployed'
+                    let impact = 'Active'
+                    let protocol = 'MetaArmy'
 
-                        // Parse transaction input to determine swarm type
-                        if (tx.input && tx.input.length > 200) {
-                            const inputData = tx.input.toLowerCase()
-                            
-                            // Look for common patterns in the transaction data
-                            if (inputData.includes('6e6674') || inputData.includes('736e697065') || inputData.includes('6f70656e736561')) {
-                                // "nft", "snipe", "opensea" in hex
-                                type = 'nft'
-                                goal = 'NFT Sniper Agent'
-                                impact = '0.1 ETH Target'
-                                protocol = 'OpenSea'
-                            } else if (inputData.includes('676f76') || inputData.includes('766f7465') || inputData.includes('64616f')) {
-                                // "gov", "vote", "dao" in hex
-                                type = 'gov'
-                                goal = 'Governance Auto-Voter'
-                                impact = '1 Vote Power'
-                                protocol = 'ENS DAO'
-                            } else if (inputData.includes('736f6369616c') || inputData.includes('746970') || inputData.includes('666172636173746572')) {
-                                // "social", "tip", "farcaster" in hex
-                                type = 'social'
-                                goal = 'Social Tip Bot'
-                                impact = '5 $MPA Tips'
-                                protocol = 'Farcaster'
-                            } else if (inputData.includes('73776170') || inputData.includes('696e76657374') || inputData.includes('61617665')) {
-                                // "swap", "invest", "aave" in hex
-                                type = 'defi'
-                                goal = 'DeFi Yield Optimizer'
-                                impact = '4.2% APY Boost'
-                                protocol = 'Aave + Lido'
-                            } else {
-                                // Try to decode the function call to get the goal parameter
-                                try {
-                                    // Look for createSwarmBundle function signature (0x + 8 chars)
-                                    if (inputData.startsWith('0x') && inputData.length > 10) {
-                                        // Skip method ID (first 10 chars) and try to find goal string
-                                        const dataWithoutMethod = inputData.substring(10)
-                                        
-                                        // Simple heuristic: if transaction has value, it's likely DeFi
-                                        if (tx.value && parseInt(tx.value) > 0) {
+                    // Parse transaction input to determine swarm type
+                    if (tx.input && tx.input.length > 200) {
+                        const inputData = tx.input.toLowerCase()
+
+                        // Look for common patterns in the transaction data
+                        if (inputData.includes('6e6674') || inputData.includes('736e697065') || inputData.includes('6f70656e736561')) {
+                            // "nft", "snipe", "opensea" in hex
+                            type = 'nft'
+                            goal = 'NFT Sniper Agent'
+                            impact = '0.1 ETH Target'
+                            protocol = 'OpenSea'
+                        } else if (inputData.includes('676f76') || inputData.includes('766f7465') || inputData.includes('64616f')) {
+                            // "gov", "vote", "dao" in hex
+                            type = 'gov'
+                            goal = 'Governance Auto-Voter'
+                            impact = '1 Vote Power'
+                            protocol = 'ENS DAO'
+                        } else if (inputData.includes('736f6369616c') || inputData.includes('746970') || inputData.includes('666172636173746572')) {
+                            // "social", "tip", "farcaster" in hex
+                            type = 'social'
+                            goal = 'Social Tip Bot'
+                            impact = '5 $MPA Tips'
+                            protocol = 'Farcaster'
+                        } else if (inputData.includes('73776170') || inputData.includes('696e76657374') || inputData.includes('61617665')) {
+                            // "swap", "invest", "aave" in hex
+                            type = 'defi'
+                            goal = 'DeFi Yield Optimizer'
+                            impact = '4.2% APY Boost'
+                            protocol = 'Aave + Lido'
+                        } else {
+                            // Try to decode the function call to get the goal parameter
+                            try {
+                                // Look for createSwarmBundle function signature (0x + 8 chars)
+                                if (inputData.startsWith('0x') && inputData.length > 10) {
+                                    // Skip method ID (first 10 chars) and try to find goal string
+                                    const dataWithoutMethod = inputData.substring(10)
+
+                                    // Simple heuristic: if transaction has value, it's likely DeFi
+                                    if (tx.value && parseInt(tx.value) > 0) {
+                                        type = 'defi'
+                                        goal = 'ETH Investment Agent'
+                                        impact = `${formatUnits(BigInt(tx.value), 18)} ETH`
+                                        protocol = 'Multi-Protocol'
+                                    } else {
+                                        // Default based on transaction timing or other factors
+                                        const hourOfDay = new Date(parseInt(tx.timeStamp) * 1000).getHours()
+                                        if (hourOfDay >= 9 && hourOfDay <= 17) {
                                             type = 'defi'
-                                            goal = 'ETH Investment Agent'
-                                            impact = `${formatUnits(BigInt(tx.value), 18)} ETH`
-                                            protocol = 'Multi-Protocol'
+                                            goal = 'Business Hours DeFi Bot'
+                                            impact = '2.1% Daily'
+                                            protocol = 'Compound'
                                         } else {
-                                            // Default based on transaction timing or other factors
-                                            const hourOfDay = new Date(parseInt(tx.timeStamp) * 1000).getHours()
-                                            if (hourOfDay >= 9 && hourOfDay <= 17) {
-                                                type = 'defi'
-                                                goal = 'Business Hours DeFi Bot'
-                                                impact = '2.1% Daily'
-                                                protocol = 'Compound'
-                                            } else {
-                                                type = 'nft'
-                                                goal = 'Night Sniper Bot'
-                                                impact = '0.05 ETH Floor'
-                                                protocol = 'OpenSea'
-                                            }
+                                            type = 'nft'
+                                            goal = 'Night Sniper Bot'
+                                            impact = '0.05 ETH Floor'
+                                            protocol = 'OpenSea'
                                         }
                                     }
-                                } catch (decodeError) {
-                                    // Could not decode transaction data, using defaults
                                 }
+                            } catch (decodeError) {
+                                // Could not decode transaction data, using defaults
                             }
-                        } else {
-                            // For transactions with minimal input data, use defaults
-                            type = 'defi'
-                            goal = 'Simple Swarm Agent'
-                            impact = 'Basic Automation'
-                            protocol = 'MetaArmy'
                         }
+                    } else {
+                        // For transactions with minimal input data, use defaults
+                        type = 'defi'
+                        goal = 'Simple Swarm Agent'
+                        impact = 'Basic Automation'
+                        protocol = 'MetaArmy'
+                    }
 
-                        console.log(`✅ Swarm ${index + 1}: ${goal} (${type})`)
+                    console.log(`✅ Swarm ${index + 1}: ${goal} (${type})`)
 
-                        return {
-                            id: `swarm-${index}`,
-                            bundleId: `0x${tx.hash.substring(2)}`, // Remove 0x and re-add to ensure proper format
-                            goal,
-                            type,
-                            status: 'active' as const,
-                            timestamp: parseInt(tx.timeStamp),
-                            totalActions: Math.floor(Math.random() * 5) + 1, // Random 1-5 actions
-                            executedActions: 1, // At least 1 executed since tx was successful
-                            txHash: tx.hash,
-                            impact,
-                            protocol
-                        }
-                    })
+                    return {
+                        id: `swarm-${index}`,
+                        bundleId: `0x${tx.hash.substring(2)}`, // Remove 0x and re-add to ensure proper format
+                        goal,
+                        type,
+                        status: 'active' as const,
+                        timestamp: parseInt(tx.timeStamp),
+                        totalActions: Math.floor(Math.random() * 5) + 1, // Random 1-5 actions
+                        executedActions: 1, // At least 1 executed since tx was successful
+                        txHash: tx.hash,
+                        impact,
+                        protocol
+                    }
+                })
 
-                    setDeployedSwarms(swarms)
-                    setLastRefresh(Date.now())
-                } else {
-                    setDeployedSwarms([])
-                }
-            } catch (error) {
+                setDeployedSwarms(swarms)
+                setLastRefresh(Date.now())
+            } else {
                 setDeployedSwarms([])
-            } finally {
-                setLoading(false)
             }
+        } catch (error) {
+            setDeployedSwarms([])
+        } finally {
+            setLoading(false)
         }
+    }
 
-        useEffect(() => {
-            fetchDeployedSwarms()
-        }, [address])
+    useEffect(() => {
+        fetchDeployedSwarms()
+    }, [address])
 
     const handleRefresh = async () => {
         toast.loading('Refreshing swarms...', { id: 'refresh' })
@@ -392,7 +391,7 @@ export function SwarmMarketplace() {
     const handleExecuteSwarm = async (swarm: DeployedSwarm) => {
         try {
             toast.loading(`Checking bundle status...`, { id: 'execute' })
-            
+
             // First check if bundle is valid
             const isValid = await checkBundleStatus(swarm.bundleId)
             if (!isValid) {
@@ -406,13 +405,9 @@ export function SwarmMarketplace() {
                 )
                 return
             }
-            
+
             toast.loading(`Executing ${swarm.goal}...`, { id: 'execute' })
-            
-            // Create ZK proof hashes array matching the number of actions
-            // For demo purposes, we'll use empty hashes (0x0000...)
-            const zkProofHashes: `0x${string}`[] = Array(swarm.totalActions).fill('0x0000000000000000000000000000000000000000000000000000000000000000')
-            
+
             // Convert transaction hash to proper bytes32 format for bundle ID
             let bundleId: `0x${string}`
             if (swarm.bundleId.startsWith('0x')) {
@@ -421,12 +416,12 @@ export function SwarmMarketplace() {
                 // If it's not a proper hex string, create a deterministic bundle ID
                 bundleId = `0x${swarm.bundleId.padStart(64, '0')}` as `0x${string}`
             }
-            
+
             const txHash = await writeContractAsync({
                 address: META_ARMY_ADDRESS,
                 abi: META_ARMY_ABI,
                 functionName: 'executeBundle',
-                args: [bundleId, zkProofHashes],
+                args: [bundleId],
                 gas: BigInt(1000000), // Increased gas limit
             })
 
@@ -439,16 +434,16 @@ export function SwarmMarketplace() {
             )
 
             // Update swarm status locally
-            setDeployedSwarms(prev => prev.map(s => 
-                s.id === swarm.id 
+            setDeployedSwarms(prev => prev.map(s =>
+                s.id === swarm.id
                     ? { ...s, status: 'completed', executedActions: s.totalActions }
                     : s
             ))
 
         } catch (error: any) {
-            
+
             let errorMessage = 'Execution failed. '
-            
+
             // Parse specific error messages
             if (error?.message?.includes('Bundle not active')) {
                 errorMessage += 'Bundle has already been executed.'
@@ -463,7 +458,7 @@ export function SwarmMarketplace() {
             } else {
                 errorMessage += 'Please check console for details.'
             }
-            
+
             toast.error(errorMessage, { id: 'execute' })
         }
     }
@@ -501,7 +496,7 @@ export function SwarmMarketplace() {
                     <p className="text-xs text-gray-600 mb-1">MetaArmy Contract: {META_ARMY_ADDRESS}</p>
                     <p className="text-xs text-gray-600 mb-1">Last Refresh: {lastRefresh ? new Date(lastRefresh).toLocaleTimeString() : 'Never'}</p>
                     <p className="text-xs text-gray-600 mb-3">Check browser console for transaction logs</p>
-                    <button 
+                    <button
                         onClick={handleRefresh}
                         disabled={loading}
                         className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -523,7 +518,7 @@ export function SwarmMarketplace() {
                     <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-2">{deployedSwarms.length} Active Agent{deployedSwarms.length !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="flex gap-2">
-                    <button 
+                    <button
                         onClick={handleRefresh}
                         disabled={loading}
                         className="px-4 py-2 bg-green-50 border border-green-100 text-green-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-100 transition-all disabled:opacity-50 flex items-center gap-2"
@@ -581,8 +576,8 @@ export function SwarmMarketplace() {
                                     <span>{Math.round((swarm.executedActions / swarm.totalActions) * 100)}%</span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                    <div 
-                                        className="bg-green-500 h-full transition-all duration-1000" 
+                                    <div
+                                        className="bg-green-500 h-full transition-all duration-1000"
                                         style={{ width: `${(swarm.executedActions / swarm.totalActions) * 100}%` }}
                                     ></div>
                                 </div>
@@ -614,7 +609,7 @@ export function SwarmMarketplace() {
                                     </>
                                 )}
                             </button>
-                            <button 
+                            <button
                                 onClick={() => window.open(`https://sepolia.etherscan.io/tx/${swarm.txHash}`, '_blank')}
                                 className="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all"
                             >
