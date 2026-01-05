@@ -4,6 +4,7 @@ export const CONTRACTS = {
   // MetaArmySimple deployed contract address on Sepolia (ERC-7715 compatible)
   META_ARMY: '0xBa8B2a116cbb0240Be18Ad7E4989CffC445Ee6d9',
   META_ARMY_SIMPLE: '0xBa8B2a116cbb0240Be18Ad7E4989CffC445Ee6d9',
+  META_PLOT_AGENT: '0xBa8B2a116cbb0240Be18Ad7E4989CffC445Ee6d9', // For backward compatibility
   ARMY_TOKEN: '0x35d55c205Ff2b5c943c5BBA88C5E0CAeC1d3648F',
 
   // Real Sepolia testnet addresses (ERC-7715 compatible)

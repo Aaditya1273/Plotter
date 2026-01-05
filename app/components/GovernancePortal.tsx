@@ -93,7 +93,7 @@ export function GovernancePortal() {
     const { writeContractAsync } = useWriteContract()
 
     // Contract addresses from constants
-    const DAO_ADDRESS = (process.env.NEXT_PUBLIC_DAO_ADDRESS || CONTRACTS.META_PLOT_AGENT) as `0x${string}`
+    const DAO_ADDRESS = (process.env.NEXT_PUBLIC_DAO_ADDRESS || CONTRACTS.META_ARMY) as `0x${string}`
     const ARMY_TOKEN_ADDRESS = CONTRACTS.ARMY_TOKEN as `0x${string}`
 
     // Read contract data
